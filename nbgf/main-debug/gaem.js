@@ -45,7 +45,7 @@ var Module = typeof Module !== 'undefined' ? Module : {};
     
       function fetchRemotePackage(packageName, packageSize, callback, errback) {
         
-        if (typeof process === 'object') {
+        if (typeof process === 'object' && typeof process.versions === 'object' && typeof process.versions.node === 'string') {
           require('fs').readFile(packageName, function(err, contents) {
             if (err) {
               errback(err);
@@ -204,7 +204,7 @@ var Module = typeof Module !== 'undefined' ? Module : {};
     }
   
    }
-   loadPackage({"files": [{"filename": "/data/death.ogg", "start": 0, "end": 15404, "audio": 1}, {"filename": "/data/cave_0.png", "start": 15404, "end": 18366}, {"filename": "/data/redforest_0.png", "start": 18366, "end": 22871}, {"filename": "/data/fog.frag", "start": 22871, "end": 24118}, {"filename": "/data/redforest_1.png", "start": 24118, "end": 29404}, {"filename": "/data/spritesheet.png", "start": 29404, "end": 94074}, {"filename": "/data/boss_wheeler.png", "start": 94074, "end": 112881}, {"filename": "/data/tint.frag", "start": 112881, "end": 113490}, {"filename": "/data/PressStart2P.ttf", "start": 113490, "end": 195970}, {"filename": "/data/fadeout_diamonds.frag", "start": 195970, "end": 196631}, {"filename": "/data/island_1.png", "start": 196631, "end": 204846}, {"filename": "/data/lava_0.png", "start": 204846, "end": 282230}, {"filename": "/data/minotaur.png", "start": 282230, "end": 334025}, {"filename": "/data/redforest_2.png", "start": 334025, "end": 338722}, {"filename": "/data/island_0.png", "start": 338722, "end": 370737}, {"filename": "/data/island_3.png", "start": 370737, "end": 372950}, {"filename": "/data/cave_2.png", "start": 372950, "end": 380135}, {"filename": "/data/vertex_out.vert", "start": 380135, "end": 380473}, {"filename": "/data/wave.frag", "start": 380473, "end": 381801}, {"filename": "/data/scifi.png", "start": 381801, "end": 394268}, {"filename": "/data/fadeout_circle.frag", "start": 394268, "end": 394755}, {"filename": "/data/island_2.png", "start": 394755, "end": 411752}, {"filename": "/data/warrior.png", "start": 411752, "end": 477339}, {"filename": "/data/cave_1.png", "start": 477339, "end": 483528}, {"filename": "/data/fog.png", "start": 483528, "end": 507692}, {"filename": "/data/cave_3.png", "start": 507692, "end": 521652}, {"filename": "/data/fadein_diamonds.frag", "start": 521652, "end": 522312}], "remote_package_size": 522312, "package_uuid": "e9a4a18a-c5f9-4633-921e-d7a56ab6dddf"});
+   loadPackage({"files": [{"filename": "/data/wave.frag", "start": 0, "end": 1328}, {"filename": "/data/tint.frag", "start": 1328, "end": 1937}, {"filename": "/data/island_1.png", "start": 1937, "end": 10152}, {"filename": "/data/island_3.png", "start": 10152, "end": 12365}, {"filename": "/data/warrior.png", "start": 12365, "end": 77952}, {"filename": "/data/spritesheet.png", "start": 77952, "end": 142622}, {"filename": "/data/lava_0.png", "start": 142622, "end": 220006}, {"filename": "/data/fadein_diamonds.frag", "start": 220006, "end": 220666}, {"filename": "/data/fadeout_circle.frag", "start": 220666, "end": 221153}, {"filename": "/data/minotaur.png", "start": 221153, "end": 272948}, {"filename": "/data/redforest_1.png", "start": 272948, "end": 278234}, {"filename": "/data/cave_0.png", "start": 278234, "end": 281196}, {"filename": "/data/cave_3.png", "start": 281196, "end": 295156}, {"filename": "/data/island_0.png", "start": 295156, "end": 327171}, {"filename": "/data/island_2.png", "start": 327171, "end": 344168}, {"filename": "/data/death.ogg", "start": 344168, "end": 359572, "audio": 1}, {"filename": "/data/PressStart2P.ttf", "start": 359572, "end": 442052}, {"filename": "/data/fog.frag", "start": 442052, "end": 443299}, {"filename": "/data/vertex_out.vert", "start": 443299, "end": 443637}, {"filename": "/data/fog.png", "start": 443637, "end": 467801}, {"filename": "/data/fadeout_diamonds.frag", "start": 467801, "end": 468462}, {"filename": "/data/cave_2.png", "start": 468462, "end": 475647}, {"filename": "/data/cave_1.png", "start": 475647, "end": 481836}, {"filename": "/data/scifi.png", "start": 481836, "end": 494303}, {"filename": "/data/redforest_2.png", "start": 494303, "end": 499000}, {"filename": "/data/boss_wheeler.png", "start": 499000, "end": 517807}, {"filename": "/data/redforest_0.png", "start": 517807, "end": 522312}], "remote_package_size": 522312, "package_uuid": "38c9c91b-fa2c-464c-a480-b7f8474b07c5"});
   
   })();
   
@@ -3425,7 +3425,7 @@ var ASM_CONSTS = {
           }
         });
       }};
-  var FS = {root:null,mounts:[],devices:{},streams:[],nextInode:1,nameTable:null,currentPath:"/",initialized:false,ignorePermissions:true,trackingDelegate:{},tracking:{openFlags:{READ:1,WRITE:2}},ErrnoError:null,genericErrors:{},filesystems:null,syncFSRequests:0,lookupPath:function(path, opts) {
+  var FS = {root:null,mounts:[],devices:{},streams:[],nextInode:1,nameTable:null,currentPath:"/",initialized:false,ignorePermissions:true,ErrnoError:null,genericErrors:{},filesystems:null,syncFSRequests:0,lookupPath:function(path, opts) {
         path = PATH_FS.resolve(FS.cwd(), path);
         opts = opts || {};
   
@@ -3967,13 +3967,6 @@ var ASM_CONSTS = {
             throw new FS.ErrnoError(errCode);
           }
         }
-        try {
-          if (FS.trackingDelegate['willMovePath']) {
-            FS.trackingDelegate['willMovePath'](old_path, new_path);
-          }
-        } catch(e) {
-          err("FS.trackingDelegate['willMovePath']('"+old_path+"', '"+new_path+"') threw an exception: " + e.message);
-        }
         // remove the node from the lookup hash
         FS.hashRemoveNode(old_node);
         // do the underlying fs rename
@@ -3985,11 +3978,6 @@ var ASM_CONSTS = {
           // add the node back to the hash (in case node_ops.rename
           // changed its name)
           FS.hashAddNode(old_node);
-        }
-        try {
-          if (FS.trackingDelegate['onMovePath']) FS.trackingDelegate['onMovePath'](old_path, new_path);
-        } catch(e) {
-          err("FS.trackingDelegate['onMovePath']('"+old_path+"', '"+new_path+"') threw an exception: " + e.message);
         }
       },rmdir:function(path) {
         var lookup = FS.lookupPath(path, { parent: true });
@@ -4006,20 +3994,8 @@ var ASM_CONSTS = {
         if (FS.isMountpoint(node)) {
           throw new FS.ErrnoError(10);
         }
-        try {
-          if (FS.trackingDelegate['willDeletePath']) {
-            FS.trackingDelegate['willDeletePath'](path);
-          }
-        } catch(e) {
-          err("FS.trackingDelegate['willDeletePath']('"+path+"') threw an exception: " + e.message);
-        }
         parent.node_ops.rmdir(parent, name);
         FS.destroyNode(node);
-        try {
-          if (FS.trackingDelegate['onDeletePath']) FS.trackingDelegate['onDeletePath'](path);
-        } catch(e) {
-          err("FS.trackingDelegate['onDeletePath']('"+path+"') threw an exception: " + e.message);
-        }
       },readdir:function(path) {
         var lookup = FS.lookupPath(path, { follow: true });
         var node = lookup.node;
@@ -4045,20 +4021,8 @@ var ASM_CONSTS = {
         if (FS.isMountpoint(node)) {
           throw new FS.ErrnoError(10);
         }
-        try {
-          if (FS.trackingDelegate['willDeletePath']) {
-            FS.trackingDelegate['willDeletePath'](path);
-          }
-        } catch(e) {
-          err("FS.trackingDelegate['willDeletePath']('"+path+"') threw an exception: " + e.message);
-        }
         parent.node_ops.unlink(parent, name);
         FS.destroyNode(node);
-        try {
-          if (FS.trackingDelegate['onDeletePath']) FS.trackingDelegate['onDeletePath'](path);
-        } catch(e) {
-          err("FS.trackingDelegate['onDeletePath']('"+path+"') threw an exception: " + e.message);
-        }
       },readlink:function(path) {
         var lookup = FS.lookupPath(path);
         var link = lookup.node;
@@ -4256,22 +4220,7 @@ var ASM_CONSTS = {
           if (!FS.readFiles) FS.readFiles = {};
           if (!(path in FS.readFiles)) {
             FS.readFiles[path] = 1;
-            err("FS.trackingDelegate error on read file: " + path);
           }
-        }
-        try {
-          if (FS.trackingDelegate['onOpenFile']) {
-            var trackingFlags = 0;
-            if ((flags & 2097155) !== 1) {
-              trackingFlags |= FS.tracking.openFlags.READ;
-            }
-            if ((flags & 2097155) !== 0) {
-              trackingFlags |= FS.tracking.openFlags.WRITE;
-            }
-            FS.trackingDelegate['onOpenFile'](path, trackingFlags);
-          }
-        } catch(e) {
-          err("FS.trackingDelegate['onOpenFile']('"+path+"', flags) threw an exception: " + e.message);
         }
         return stream;
       },close:function(stream) {
@@ -4357,11 +4306,6 @@ var ASM_CONSTS = {
         }
         var bytesWritten = stream.stream_ops.write(stream, buffer, offset, length, position, canOwn);
         if (!seeking) stream.position += bytesWritten;
-        try {
-          if (stream.path && FS.trackingDelegate['onWriteToFile']) FS.trackingDelegate['onWriteToFile'](stream.path);
-        } catch(e) {
-          err("FS.trackingDelegate['onWriteToFile']('"+stream.path+"') threw an exception: " + e.message);
-        }
         return bytesWritten;
       },allocate:function(stream, offset, length) {
         if (FS.isClosed(stream)) {
@@ -11034,13 +10978,13 @@ var _main = Module["_main"] = function() {
 };
 
 /** @type {function(...*):?} */
-var _free = Module["_free"] = function() {
-  return (_free = Module["_free"] = Module["asm"]["free"]).apply(null, arguments);
+var _malloc = Module["_malloc"] = function() {
+  return (_malloc = Module["_malloc"] = Module["asm"]["malloc"]).apply(null, arguments);
 };
 
 /** @type {function(...*):?} */
-var _malloc = Module["_malloc"] = function() {
-  return (_malloc = Module["_malloc"] = Module["asm"]["malloc"]).apply(null, arguments);
+var _free = Module["_free"] = function() {
+  return (_free = Module["_free"] = Module["asm"]["free"]).apply(null, arguments);
 };
 
 /** @type {function(...*):?} */

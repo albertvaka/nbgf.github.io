@@ -20,6 +20,7 @@
           const data = await response.json();
           let htmlString = '<ul>';
           for (let file of data) {
+            if (file.type != "dir") continue;
             htmlString += `<li><a href="https://albertvaka.github.io/${file.path}">${file.name}</a></li>`;
           }
           htmlString += '</ul>';

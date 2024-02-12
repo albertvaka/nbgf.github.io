@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=640, user-scalable=no" />
+  <meta property="og:url" content="https://doszerotd.albertvaca.repl.co">
+  <meta property="og:title" content="Tarifa 2.0TD">
+  <meta property="og:description" content="Consulta el període horari actual">
+  <meta property="og:image" itemprop="image" content="https://doszerotd.albertvaca.repl.co/rellotges.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  </meta>
+  <meta property="twitter:image" itemprop="image" content="https://doszerotd.albertvaca.repl.co/rellotges.jpg">
+  <title>Tarifa 2.0TD</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      font-size: 18pt;
+      text-align: center;
+      width: 600px;
+      margin: 20px;
+    }
+  </style>
+</head>
+
+<body>
+  <hr>
+  <p id="hora"></p>
+  <p>El període actual és <b><span id="tarifa">...</span></b>, <span id="canvia_a">...</span>.</p>
+  <script>
+    var textHora = document.getElementById("hora");
+    var textTarifa = document.getElementById("tarifa");
+    var textCanvia = document.getElementById("canvia_a");
+
+    var today = new Date();
+    //textHora.innerHTML = today;
+
+    function setText(ara, canvi) {
+      textTarifa.innerHTML = ara
+      textCanvia.innerHTML = "canvia a " + canvi
+    }
+    function setTextFestiu(motiu) {
+      setText("vall", "durant tot el dia d'avui (" + motiu + ")")
+    }
+    function isFestivoNacional(year, month, day) {
+      if (year > 2024) {
+        hora.innerHTML = "<b>Nota:</b> cal actualitzar els festius nacionals d'aquest any, diga-ho a l'Albert. Fins que ho arregli els festius nacionals (tarifa vall) no es tindran en compte."
+        return false;
+      }
+      var festius2021 = {"1/1": true, "2/4": true, "1/5": true, "12/10": true, "1/11": true, "6/12": true, "8/12": true, "25/12": true}
+      var festius2022 = {"1/1": true, "6/1": true, "15/4": true, "15/8": true, "12/10": true, "1/11": true, "6/12": true, "8/12": true}
+      var festius2023 = {"7/4": true, "1/5": true, "15/8": true, "12/10": true, "1/11": true, "6/12": true, "8/12": true, "25/12": true}
+      var festius = {"1/1": true, "6/1": true, "29/3": true, "1/5": true, "15/8": true, "12/10": true, "1/11": true, "6/12": true, "25/12": true}
+      return festius[(day + "/" + month)];
+    }
+
+    if (today.getDay() == 0 || today.getDay() == 6) {
+      setTextFestiu(today.getDay() == 0 ? "diumenge" : "dissabte");
+    } else {
+      if (isFestivoNacional(today.getFullYear(), today.getMonth() + 1, today.getDate())) {
+        setTextFestiu("festiu nacional");
+      } else {
+        var h = today.getHours();
+        if (h < 8) {
+          setText("vall", "pla a les 8:00");
+        } else if (h < 10) {
+          setText("pla", "punta a les 10:00");
+        } else if (h < 14) {
+          setText("punta", "pla a les 14:00");
+        } else if (h < 18) {
+          setText("pla", "punta a les 18:00");
+        } else if (h < 22) {
+          setText("punta", "pla a les 22:00");
+        } else {
+          setText("pla", "vall a les 00:00");
+        }
+      }
+    }
+  </script>
+  <hr>
+  <img src="rellotges.jpg" width="600px">
+</body>
+
+</html>

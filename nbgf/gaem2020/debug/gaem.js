@@ -16,7 +16,7 @@ var Module = typeof Module != 'undefined' ? Module : {};
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: /tmp/tmph0u83bua.js
+// include: /tmp/tmpt5rwck99.js
 
   if (!Module.expectedDataFileDownloads) {
     Module.expectedDataFileDownloads = 0;
@@ -199,7 +199,7 @@ Module['FS_createPath']("/", "data", true, true);
 
   })();
 
-// end include: /tmp/tmph0u83bua.js
+// end include: /tmp/tmpt5rwck99.js
 
 
 // Sometimes an existing Module object exists with properties
@@ -405,10 +405,6 @@ if (Module['quit']) quit_ = Module['quit'];
 
 var wasmBinary; 
 if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
-
-if (typeof WebAssembly != 'object') {
-  abort('no native wasm support detected');
-}
 
 // include: base64Utils.js
 // Converts a string of base64 into a byte array (Uint8Array).
@@ -6168,12 +6164,10 @@ var ASM_CONSTS = {
   var _glBufferData = (target, size, data, usage) => {
   
       if (true) {
-        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use
-        // those always when possible.  If size is zero, WebGL would interpret
-        // uploading the whole input arraybuffer (starting from given offset),
-        // which would not make sense in WebAssembly, so avoid uploading if size
-        // is zero. However we must still call bufferData to establish a backing
-        // storage of zero bytes.
+        // If size is zero, WebGL would interpret uploading the whole input
+        // arraybuffer (starting from given offset), which would not make sense in
+        // WebAssembly, so avoid uploading if size is zero. However we must still
+        // call bufferData to establish a backing storage of zero bytes.
         if (data && size) {
           GLctx.bufferData(target, HEAPU8, usage, data, size);
         } else {
@@ -6192,8 +6186,6 @@ var ASM_CONSTS = {
   /** @suppress {duplicate } */
   var _glBufferSubData = (target, offset, size, data) => {
       if (true) {
-        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use
-        // those always when possible.
         size && GLctx.bufferSubData(target, offset, HEAPU8, data, size);
         return;
       }
@@ -6275,13 +6267,11 @@ var ASM_CONSTS = {
   /** @suppress {duplicate } */
   var _glCompressedTexImage2D = (target, level, internalFormat, width, height, border, imageSize, data) => {
       if (true) {
-        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use
-        // those always when possible.
         if (GLctx.currentPixelUnpackBufferBinding || !imageSize) {
           GLctx.compressedTexImage2D(target, level, internalFormat, width, height, border, imageSize, data);
-        } else {
-          GLctx.compressedTexImage2D(target, level, internalFormat, width, height, border, HEAPU8, data, imageSize);
+          return;
         }
+        GLctx.compressedTexImage2D(target, level, internalFormat, width, height, border, HEAPU8, data, imageSize);
         return;
       }
       GLctx.compressedTexImage2D(target, level, internalFormat, width, height, border, data ? HEAPU8.subarray((data), data+imageSize) : null);
@@ -6301,13 +6291,11 @@ var ASM_CONSTS = {
   /** @suppress {duplicate } */
   var _glCompressedTexSubImage2D = (target, level, xoffset, yoffset, width, height, format, imageSize, data) => {
       if (true) {
-        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use
-        // those always when possible.
         if (GLctx.currentPixelUnpackBufferBinding || !imageSize) {
           GLctx.compressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, imageSize, data);
-        } else {
-          GLctx.compressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, HEAPU8, data, imageSize);
+          return;
         }
+        GLctx.compressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, HEAPU8, data, imageSize);
         return;
       }
       GLctx.compressedTexSubImage2D(target, level, xoffset, yoffset, width, height, format, data ? HEAPU8.subarray((data), data+imageSize) : null);
@@ -8169,15 +8157,13 @@ var ASM_CONSTS = {
   /** @suppress {duplicate } */
   var _glReadPixels = (x, y, width, height, format, type, pixels) => {
       if (true) {
-        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use
-        // those always when possible.
         if (GLctx.currentPixelPackBufferBinding) {
           GLctx.readPixels(x, y, width, height, format, type, pixels);
-        } else {
-          var heap = heapObjectForWebGLType(type);
-          var target = toTypedArrayIndex(pixels, heap);
-          GLctx.readPixels(x, y, width, height, format, type, heap, target);
+          return;
         }
+        var heap = heapObjectForWebGLType(type);
+        var target = toTypedArrayIndex(pixels, heap);
+        GLctx.readPixels(x, y, width, height, format, type, heap, target);
         return;
       }
       var pixelData = emscriptenWebGLGetTexPixelData(type, format, width, height, pixels, format);
@@ -8287,19 +8273,19 @@ var ASM_CONSTS = {
   /** @suppress {duplicate } */
   var _glTexImage2D = (target, level, internalFormat, width, height, border, format, type, pixels) => {
       if (true) {
-        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use
-        // those always when possible.
         if (GLctx.currentPixelUnpackBufferBinding) {
           GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, pixels);
-        } else if (pixels) {
-          var heap = heapObjectForWebGLType(type);
-          GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, heap, toTypedArrayIndex(pixels, heap));
-        } else {
-          GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, null);
+          return;
         }
-        return;
+        if (pixels) {
+          var heap = heapObjectForWebGLType(type);
+          var index = toTypedArrayIndex(pixels, heap);
+          GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, heap, index);
+          return;
+        }
       }
-      GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, pixels ? emscriptenWebGLGetTexPixelData(type, format, width, height, pixels, internalFormat) : null);
+      var pixelData = pixels ? emscriptenWebGLGetTexPixelData(type, format, width, height, pixels, internalFormat) : null;
+      GLctx.texImage2D(target, level, internalFormat, width, height, border, format, type, pixelData);
     };
   var _emscripten_glTexImage2D = _glTexImage2D;
 
@@ -8353,11 +8339,11 @@ var ASM_CONSTS = {
   /** @suppress {duplicate } */
   var _glTexSubImage2D = (target, level, xoffset, yoffset, width, height, format, type, pixels) => {
       if (true) {
-        // WebGL 2 provides new garbage-free entry points to call to WebGL. Use
-        // those always when possible.
         if (GLctx.currentPixelUnpackBufferBinding) {
           GLctx.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
-        } else if (pixels) {
+          return;
+        }
+        if (pixels) {
           var heap = heapObjectForWebGLType(type);
           GLctx.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, heap, toTypedArrayIndex(pixels, heap));
           return;
@@ -9602,7 +9588,7 @@ var ASM_CONSTS = {
       return ((hi + 0x200000) >>> 0 < 0x400001 - !!lo) ? (lo >>> 0) + hi * 4294967296 : NaN;
     };
   function _fd_seek(fd,offset_low, offset_high,whence,newOffset) {
-    var offset = convertI32PairToI53Checked(offset_low, offset_high);;
+    var offset = convertI32PairToI53Checked(offset_low, offset_high);
   
     
   try {

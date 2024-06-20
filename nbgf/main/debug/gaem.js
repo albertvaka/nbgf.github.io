@@ -35,7 +35,7 @@ if (ENVIRONMENT_IS_NODE) {
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: /tmp/tmpfeloqql9.js
+// include: /tmp/tmpbtwa5cyu.js
 
   if (!Module.expectedDataFileDownloads) {
     Module.expectedDataFileDownloads = 0;
@@ -220,7 +220,7 @@ Module['FS_createPath']("/", "data", true, true);
 
   })();
 
-// end include: /tmp/tmpfeloqql9.js
+// end include: /tmp/tmpbtwa5cyu.js
 
 
 // Sometimes an existing Module object exists with properties
@@ -349,20 +349,34 @@ read_ = (url) => {
   }
 
   readAsync = (url, onload, onerror) => {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.responseType = 'arraybuffer';
-    xhr.onload = () => {
-      if (xhr.status == 200 || (xhr.status == 0 && xhr.response)) { // file URLs can return 0
-        onload(xhr.response);
-        return;
+    // Fetch has some additional restrictions over XHR, like it can't be used on a file:// url.
+    // See https://github.com/github/fetch/pull/92#issuecomment-140665932
+    // Cordova or Electron apps are typically loaded from a file:// url.
+    // So use XHR on webview if URL is a file URL.
+    if (isFileURI(url)) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'arraybuffer';
+      xhr.onload = () => {
+        if (xhr.status == 200 || (xhr.status == 0 && xhr.response)) { // file URLs can return 0
+          onload(xhr.response);
+          return;
+        }
+        onerror();
+      };
+      xhr.onerror = onerror;
+      xhr.send(null);
+      return;
+    }
+    fetch(url, { credentials: 'same-origin' })
+    .then((response) => {
+      if (response.ok) {
+        return response.arrayBuffer();
       }
-      onerror();
-    };
-    xhr.onerror = onerror;
-    xhr.send(null);
-  }
-
+      return Promise.reject(new Error(response.status + ' : ' + response.url));
+    })
+    .then(onload, onerror)
+  };
 // end include: web_or_worker_shell_read.js
   }
 } else
@@ -693,29 +707,18 @@ function getBinarySync(file) {
 }
 
 function getBinaryPromise(binaryFile) {
-  // If we don't have the binary yet, try to load it asynchronously.
-  // Fetch has some additional restrictions over XHR, like it can't be used on a file:// url.
-  // See https://github.com/github/fetch/pull/92#issuecomment-140665932
-  // Cordova or Electron apps are typically loaded from a file:// url.
-  // So use fetch if it is available and the url is not a file, otherwise fall back to XHR.
+  // If we don't have the binary yet, load it asynchronously using readAsync.
   if (!wasmBinary
-      && (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER)) {
-    if (typeof fetch == 'function'
-      && !isFileURI(binaryFile)
-    ) {
-      return fetch(binaryFile, { credentials: 'same-origin' }).then((response) => {
-        if (!response['ok']) {
-          throw `failed to load wasm binary file at '${binaryFile}'`;
-        }
-        return response['arrayBuffer']();
-      }).catch(() => getBinarySync(binaryFile));
-    }
-    else if (readAsync) {
-      // fetch is not available or url is file => try XHR (readAsync uses XHR internally)
-      return new Promise((resolve, reject) => {
-        readAsync(binaryFile, (response) => resolve(new Uint8Array(/** @type{!ArrayBuffer} */(response))), reject)
-      });
-    }
+      ) {
+    // Fetch the binary use readAsync
+    return new Promise((resolve, reject) => {
+      readAsync(binaryFile,
+        (response) => resolve(new Uint8Array(/** @type{!ArrayBuffer} */(response))),
+        (error) => {
+          try { resolve(getBinarySync(binaryFile)); }
+          catch (e) { reject(e); }
+        });
+    });
   }
 
   // Otherwise, getBinarySync should be able to get it synchronously
@@ -843,24 +846,24 @@ var tempI64;
 // === Body ===
 
 var ASM_CONSTS = {
-  560032: () => { FS.mkdir('/saves'); FS.mount(IDBFS, {}, '/saves'); FS.syncfs(true, function (err) { console.log(err ? err : "emscripten: /saves directory mounted"); try { ccall('start_main_loop', null); } catch(e) { if (e != 'unwind') throw e; } }); },  
- 560266: ($0) => { if ($0) { document.documentElement.requestFullscreen(); } else { document.exitFullscreen(); } },  
- 560364: ($0) => { var str = UTF8ToString($0) + '\n\n' + 'Abort/Retry/Ignore/AlwaysIgnore? [ariA] :'; var reply = window.prompt(str, "i"); if (reply === null) { reply = "i"; } return allocate(intArrayFromString(reply), 'i8', ALLOC_NORMAL); },  
- 560589: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
- 560736: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
- 560970: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { autoResumeAudioContext(SDL2.audioContext); } } return SDL2.audioContext === undefined ? -1 : 0; },  
- 561463: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
- 561531: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearTimeout(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.silenceTimer = setTimeout(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
- 563183: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vi', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); },  
- 563593: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
- 564198: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[$0 + ((j*numChannels + c) << 2) >> 2]; } } },  
- 564678: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearTimeout(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } SDL2.capture.stream = undefined; } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); SDL2.capture.scriptProcessorNode = undefined; } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); SDL2.capture.mediaStreamNode = undefined; } if (SDL2.capture.silenceBuffer !== undefined) { SDL2.capture.silenceBuffer = undefined } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); SDL2.audio.scriptProcessorNode = undefined; } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
- 565850: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Module['createContext'](Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels >> 2; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
- 567319: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels >> 2; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
- 568308: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
- 568391: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } },  
- 568460: () => { return window.innerWidth; },  
- 568490: () => { return window.innerHeight; }
+  559976: () => { FS.mkdir('/saves'); FS.mount(IDBFS, {}, '/saves'); FS.syncfs(true, function (err) { console.log(err ? err : "emscripten: /saves directory mounted"); try { ccall('start_main_loop', null); } catch(e) { if (e != 'unwind') throw e; } }); },  
+ 560210: ($0) => { if ($0) { document.documentElement.requestFullscreen(); } else { document.exitFullscreen(); } },  
+ 560308: ($0) => { var str = UTF8ToString($0) + '\n\n' + 'Abort/Retry/Ignore/AlwaysIgnore? [ariA] :'; var reply = window.prompt(str, "i"); if (reply === null) { reply = "i"; } return allocate(intArrayFromString(reply), 'i8', ALLOC_NORMAL); },  
+ 560533: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
+ 560680: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
+ 560914: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { autoResumeAudioContext(SDL2.audioContext); } } return SDL2.audioContext === undefined ? -1 : 0; },  
+ 561407: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
+ 561475: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearTimeout(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.silenceTimer = setTimeout(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
+ 563127: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vi', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); },  
+ 563537: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
+ 564142: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[$0 + ((j*numChannels + c) << 2) >> 2]; } } },  
+ 564622: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearTimeout(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } SDL2.capture.stream = undefined; } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); SDL2.capture.scriptProcessorNode = undefined; } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); SDL2.capture.mediaStreamNode = undefined; } if (SDL2.capture.silenceBuffer !== undefined) { SDL2.capture.silenceBuffer = undefined } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); SDL2.audio.scriptProcessorNode = undefined; } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
+ 565794: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Module['createContext'](Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels >> 2; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
+ 567263: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels >> 2; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
+ 568252: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
+ 568335: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } },  
+ 568404: () => { return window.innerWidth; },  
+ 568434: () => { return window.innerHeight; }
 };
 
 // end include: preamble.js
@@ -2082,18 +2085,17 @@ var ASM_CONSTS = {
           var fd = process.stdin.fd;
   
           try {
-            bytesRead = fs.readSync(fd, buf);
+            bytesRead = fs.readSync(fd, buf, 0, BUFSIZE);
           } catch(e) {
-            // Cross-platform differences: on Windows, reading EOF throws an exception, but on other OSes,
-            // reading EOF returns 0. Uniformize behavior by treating the EOF exception to return 0.
+            // Cross-platform differences: on Windows, reading EOF throws an
+            // exception, but on other OSes, reading EOF returns 0. Uniformize
+            // behavior by treating the EOF exception to return 0.
             if (e.toString().includes('EOF')) bytesRead = 0;
             else throw e;
           }
   
           if (bytesRead > 0) {
             result = buf.slice(0, bytesRead).toString('utf-8');
-          } else {
-            result = null;
           }
         } else
         if (typeof window != 'undefined' &&
@@ -2103,13 +2105,8 @@ var ASM_CONSTS = {
           if (result !== null) {
             result += '\n';
           }
-        } else if (typeof readline == 'function') {
-          // Command line.
-          result = readline();
-          if (result !== null) {
-            result += '\n';
-          }
-        }
+        } else
+        {}
         if (!result) {
           return null;
         }
@@ -2457,7 +2454,6 @@ var ASM_CONSTS = {
           old_node.name = new_name;
           new_dir.contents[new_name] = old_node;
           new_dir.timestamp = old_node.parent.timestamp;
-          old_node.parent = new_dir;
         },
   unlink(parent, name) {
           delete parent.contents[name];
@@ -2704,7 +2700,79 @@ var ASM_CONSTS = {
       },
   DB_VERSION:21,
   DB_STORE_NAME:"FILE_DATA",
-  mount:(...args) => MEMFS.mount(...args),
+  queuePersist:(mount) => {
+        function onPersistComplete() {
+          if (mount.idbPersistState === 'again') startPersist(); // If a new sync request has appeared in between, kick off a new sync
+          else mount.idbPersistState = 0; // Otherwise reset sync state back to idle to wait for a new sync later
+        }
+        function startPersist() {
+          mount.idbPersistState = 'idb'; // Mark that we are currently running a sync operation
+          IDBFS.syncfs(mount, /*populate:*/false, onPersistComplete);
+        }
+  
+        if (!mount.idbPersistState) {
+          // Programs typically write/copy/move multiple files in the in-memory
+          // filesystem within a single app frame, so when a filesystem sync
+          // command is triggered, do not start it immediately, but only after
+          // the current frame is finished. This way all the modified files
+          // inside the main loop tick will be batched up to the same sync.
+          mount.idbPersistState = setTimeout(startPersist, 0);
+        } else if (mount.idbPersistState === 'idb') {
+          // There is an active IndexedDB sync operation in-flight, but we now
+          // have accumulated more files to sync. We should therefore queue up
+          // a new sync after the current one finishes so that all writes
+          // will be properly persisted.
+          mount.idbPersistState = 'again';
+        }
+      },
+  mount:(mount) => {
+        // reuse core MEMFS functionality
+        var mnt = MEMFS.mount(mount);
+        // If the automatic IDBFS persistence option has been selected, then automatically persist
+        // all modifications to the filesystem as they occur.
+        if (mount?.opts?.autoPersist) {
+          mnt.idbPersistState = 0; // IndexedDB sync starts in idle state
+          var memfs_node_ops = mnt.node_ops;
+          mnt.node_ops = Object.assign({}, mnt.node_ops); // Clone node_ops to inject write tracking
+          mnt.node_ops.mknod = (parent, name, mode, dev) => {
+            var node = memfs_node_ops.mknod(parent, name, mode, dev);
+            // Propagate injected node_ops to the newly created child node
+            node.node_ops = mnt.node_ops;
+            // Remember for each IDBFS node which IDBFS mount point they came from so we know which mount to persist on modification.
+            node.idbfs_mount = mnt.mount;
+            // Remember original MEMFS stream_ops for this node
+            node.memfs_stream_ops = node.stream_ops;
+            // Clone stream_ops to inject write tracking
+            node.stream_ops = Object.assign({}, node.stream_ops);
+  
+            // Track all file writes
+            node.stream_ops.write = (stream, buffer, offset, length, position, canOwn) => {
+              // This file has been modified, we must persist IndexedDB when this file closes
+              stream.node.isModified = true;
+              return node.memfs_stream_ops.write(stream, buffer, offset, length, position, canOwn);
+            };
+  
+            // Persist IndexedDB on file close
+            node.stream_ops.close = (stream) => {
+              var n = stream.node;
+              if (n.isModified) {
+                IDBFS.queuePersist(n.idbfs_mount);
+                n.isModified = false;
+              }
+              if (n.memfs_stream_ops.close) return n.memfs_stream_ops.close(stream);
+            };
+  
+            return node;
+          };
+          // Also kick off persisting the filesystem on other operations that modify the filesystem.
+          mnt.node_ops.mkdir   = (...args) => (IDBFS.queuePersist(mnt.mount), memfs_node_ops.mkdir(...args));
+          mnt.node_ops.rmdir   = (...args) => (IDBFS.queuePersist(mnt.mount), memfs_node_ops.rmdir(...args));
+          mnt.node_ops.symlink = (...args) => (IDBFS.queuePersist(mnt.mount), memfs_node_ops.symlink(...args));
+          mnt.node_ops.unlink  = (...args) => (IDBFS.queuePersist(mnt.mount), memfs_node_ops.unlink(...args));
+          mnt.node_ops.rename  = (...args) => (IDBFS.queuePersist(mnt.mount), memfs_node_ops.rename(...args));
+        }
+        return mnt;
+      },
   syncfs:(mount, populate, callback) => {
         IDBFS.getLocalSet(mount, (err, local) => {
           if (err) return callback(err);
@@ -3651,6 +3719,9 @@ var ASM_CONSTS = {
         // do the underlying fs rename
         try {
           old_dir.node_ops.rename(old_node, new_dir, new_name);
+          // update old node (we do this here to avoid each backend 
+          // needing to)
+          old_node.parent = new_dir;
         } catch (e) {
           throw e;
         } finally {
@@ -3828,8 +3899,8 @@ var ASM_CONSTS = {
           throw new FS.ErrnoError(44);
         }
         flags = typeof flags == 'string' ? FS_modeStringToFlags(flags) : flags;
-        mode = typeof mode == 'undefined' ? 438 /* 0666 */ : mode;
         if ((flags & 64)) {
+          mode = typeof mode == 'undefined' ? 438 /* 0666 */ : mode;
           mode = (mode & 4095) | 32768;
         } else {
           mode = 0;
@@ -4962,6 +5033,7 @@ var ASM_CONSTS = {
   stringiCache:{
   },
   unpackAlignment:4,
+  unpackRowLength:0,
   recordError:(errorCode) => {
         if (!GL.lastError) {
           GL.lastError = errorCode;
@@ -8061,8 +8133,10 @@ var ASM_CONSTS = {
 
   /** @suppress {duplicate } */
   var _glPixelStorei = (pname, param) => {
-      if (pname == 0xCF5 /* GL_UNPACK_ALIGNMENT */) {
+      if (pname == 3317) {
         GL.unpackAlignment = param;
+      } else if (pname == 3314) {
+        GL.unpackRowLength = param;
       }
       GLctx.pixelStorei(pname, param);
     };
@@ -8094,12 +8168,12 @@ var ASM_CONSTS = {
   var _glReadBuffer = (x0) => GLctx.readBuffer(x0);
   var _emscripten_glReadBuffer = _glReadBuffer;
 
-  var computeUnpackAlignedImageSize = (width, height, sizePerPixel, alignment) => {
+  var computeUnpackAlignedImageSize = (width, height, sizePerPixel) => {
       function roundedToNextMultipleOf(x, y) {
         return (x + y - 1) & -y;
       }
-      var plainRowSize = width * sizePerPixel;
-      var alignedRowSize = roundedToNextMultipleOf(plainRowSize, alignment);
+      var plainRowSize = (GL.unpackRowLength || width) * sizePerPixel;
+      var alignedRowSize = roundedToNextMultipleOf(plainRowSize, GL.unpackAlignment);
       return height * alignedRowSize;
     };
   
@@ -8160,7 +8234,7 @@ var ASM_CONSTS = {
   var emscriptenWebGLGetTexPixelData = (type, format, width, height, pixels, internalFormat) => {
       var heap = heapObjectForWebGLType(type);
       var sizePerPixel = colorChannelsInGlTextureFormat(format) * heap.BYTES_PER_ELEMENT;
-      var bytes = computeUnpackAlignedImageSize(width, height, sizePerPixel, GL.unpackAlignment);
+      var bytes = computeUnpackAlignedImageSize(width, height, sizePerPixel);
       return heap.subarray(toTypedArrayIndex(pixels, heap), toTypedArrayIndex(pixels + bytes, heap));
     };
   
@@ -10160,9 +10234,15 @@ var ASM_CONSTS = {
       return ret;
     };
 
+  var FS_createPath = FS.createPath;
+
 
 
   var FS_unlink = (path) => FS.unlink(path);
+
+  var FS_createLazyFile = FS.createLazyFile;
+
+  var FS_createDevice = FS.createDevice;
 
       // exports
       Module["requestFullscreen"] = Browser.requestFullscreen;
@@ -11166,13 +11246,13 @@ function invoke_vi(index,a1) {
 
 Module['addRunDependency'] = addRunDependency;
 Module['removeRunDependency'] = removeRunDependency;
-Module['FS_createPath'] = FS.createPath;
-Module['FS_createLazyFile'] = FS.createLazyFile;
-Module['FS_createDevice'] = FS.createDevice;
 Module['ccall'] = ccall;
-Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
-Module['FS_createDataFile'] = FS.createDataFile;
-Module['FS_unlink'] = FS.unlink;
+Module['FS_createPreloadedFile'] = FS_createPreloadedFile;
+Module['FS_unlink'] = FS_unlink;
+Module['FS_createPath'] = FS_createPath;
+Module['FS_createDevice'] = FS_createDevice;
+Module['FS_createDataFile'] = FS_createDataFile;
+Module['FS_createLazyFile'] = FS_createLazyFile;
 
 
 var calledRun;

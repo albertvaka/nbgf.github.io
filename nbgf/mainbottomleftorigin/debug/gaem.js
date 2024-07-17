@@ -35,7 +35,7 @@ if (ENVIRONMENT_IS_NODE) {
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: /tmp/tmp34ayt9ms.js
+// include: /tmp/tmph3hpmlj4.js
 
   if (!Module.expectedDataFileDownloads) {
     Module.expectedDataFileDownloads = 0;
@@ -104,9 +104,9 @@ var REMOTE_PACKAGE_SIZE = metadata['remote_package_size'];
               num++;
             }
             total = Math.ceil(total * Module.expectedDataFileDownloads/num);
-            if (Module['setStatus']) Module['setStatus'](`Downloading data... (${loaded}/${total})`);
+            Module['setStatus']?.(`Downloading data... (${loaded}/${total})`);
           } else if (!Module.dataFileDownloads) {
-            if (Module['setStatus']) Module['setStatus']('Downloading data...');
+            Module['setStatus']?.('Downloading data...');
           }
         };
         xhr.onerror = function(event) {
@@ -139,7 +139,7 @@ var REMOTE_PACKAGE_SIZE = metadata['remote_package_size'];
         }
       }, handleError);
 
-    function runWithFS() {
+    function runWithFS(Module) {
 
       function assert(check, msg) {
         if (!check) throw msg + new Error().stack;
@@ -209,7 +209,7 @@ Module['FS_createPath']("/", "data", true, true);
 
     }
     if (Module['calledRun']) {
-      runWithFS();
+      runWithFS(Module);
     } else {
       if (!Module['preRun']) Module['preRun'] = [];
       Module["preRun"].push(runWithFS); // FS is not initialized yet, wait for it
@@ -220,7 +220,7 @@ Module['FS_createPath']("/", "data", true, true);
 
   })();
 
-// end include: /tmp/tmp34ayt9ms.js
+// end include: /tmp/tmph3hpmlj4.js
 
 
 // Sometimes an existing Module object exists with properties
@@ -246,9 +246,7 @@ function locateFile(path) {
 }
 
 // Hooks that are implemented differently in different runtime environments.
-var read_,
-    readAsync,
-    readBinary;
+var readAsync, readBinary;
 
 if (ENVIRONMENT_IS_NODE) {
 
@@ -260,27 +258,22 @@ if (ENVIRONMENT_IS_NODE) {
   scriptDirectory = __dirname + '/';
 
 // include: node_shell_read.js
-read_ = (filename, binary) => {
+readBinary = (filename) => {
   // We need to re-wrap `file://` strings to URLs. Normalizing isn't
   // necessary in that case, the path should already be absolute.
   filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
-  return fs.readFileSync(filename, binary ? undefined : 'utf8');
-};
-
-readBinary = (filename) => {
-  var ret = read_(filename, true);
-  if (!ret.buffer) {
-    ret = new Uint8Array(ret);
-  }
+  var ret = fs.readFileSync(filename);
   return ret;
 };
 
-readAsync = (filename, onload, onerror, binary = true) => {
-  // See the comment in the `read_` function.
+readAsync = (filename, binary = true) => {
+  // See the comment in the `readBinary` function.
   filename = isFileURI(filename) ? new URL(filename) : nodePath.normalize(filename);
-  fs.readFile(filename, binary ? undefined : 'utf8', (err, data) => {
-    if (err) onerror(err);
-    else onload(binary ? data.buffer : data);
+  return new Promise((resolve, reject) => {
+    fs.readFile(filename, binary ? undefined : 'utf8', (err, data) => {
+      if (err) reject(err);
+      else resolve(binary ? data.buffer : data);
+    });
   });
 };
 // end include: node_shell_read.js
@@ -331,14 +324,7 @@ if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
 
   {
 // include: web_or_worker_shell_read.js
-read_ = (url) => {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, false);
-    xhr.send(null);
-    return xhr.responseText;
-  }
-
-  if (ENVIRONMENT_IS_WORKER) {
+if (ENVIRONMENT_IS_WORKER) {
     readBinary = (url) => {
       var xhr = new XMLHttpRequest();
       xhr.open('GET', url, false);
@@ -348,34 +334,33 @@ read_ = (url) => {
     };
   }
 
-  readAsync = (url, onload, onerror) => {
+  readAsync = (url) => {
     // Fetch has some additional restrictions over XHR, like it can't be used on a file:// url.
     // See https://github.com/github/fetch/pull/92#issuecomment-140665932
     // Cordova or Electron apps are typically loaded from a file:// url.
     // So use XHR on webview if URL is a file URL.
     if (isFileURI(url)) {
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', url, true);
-      xhr.responseType = 'arraybuffer';
-      xhr.onload = () => {
-        if (xhr.status == 200 || (xhr.status == 0 && xhr.response)) { // file URLs can return 0
-          onload(xhr.response);
-          return;
-        }
-        onerror();
-      };
-      xhr.onerror = onerror;
-      xhr.send(null);
-      return;
+      return new Promise((reject, resolve) => {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.responseType = 'arraybuffer';
+        xhr.onload = () => {
+          if (xhr.status == 200 || (xhr.status == 0 && xhr.response)) { // file URLs can return 0
+            resolve(xhr.response);
+          }
+          reject(xhr.status);
+        };
+        xhr.onerror = reject;
+        xhr.send(null);
+      });
     }
-    fetch(url, { credentials: 'same-origin' })
-    .then((response) => {
-      if (response.ok) {
-        return response.arrayBuffer();
-      }
-      return Promise.reject(new Error(response.status + ' : ' + response.url));
-    })
-    .then(onload, onerror)
+    return fetch(url, { credentials: 'same-origin' })
+      .then((response) => {
+        if (response.ok) {
+          return response.arrayBuffer();
+        }
+        return Promise.reject(new Error(response.status + ' : ' + response.url));
+      })
   };
 // end include: web_or_worker_shell_read.js
   }
@@ -710,15 +695,12 @@ function getBinaryPromise(binaryFile) {
   // If we don't have the binary yet, load it asynchronously using readAsync.
   if (!wasmBinary
       ) {
-    // Fetch the binary use readAsync
-    return new Promise((resolve, reject) => {
-      readAsync(binaryFile,
-        (response) => resolve(new Uint8Array(/** @type{!ArrayBuffer} */(response))),
-        (error) => {
-          try { resolve(getBinarySync(binaryFile)); }
-          catch (e) { reject(e); }
-        });
-    });
+    // Fetch the binary using readAsync
+    return readAsync(binaryFile).then(
+      (response) => new Uint8Array(/** @type{!ArrayBuffer} */(response)),
+      // Fall back to getBinarySync if readAsync fails
+      () => getBinarySync(binaryFile)
+    );
   }
 
   // Otherwise, getBinarySync should be able to get it synchronously
@@ -846,24 +828,24 @@ var tempI64;
 // === Body ===
 
 var ASM_CONSTS = {
-  559976: () => { FS.mkdir('/saves'); FS.mount(IDBFS, {}, '/saves'); FS.syncfs(true, function (err) { console.log(err ? err : "emscripten: /saves directory mounted"); try { ccall('start_main_loop', null); } catch(e) { if (e != 'unwind') throw e; } }); },  
- 560210: ($0) => { if ($0) { document.documentElement.requestFullscreen(); } else { document.exitFullscreen(); } },  
- 560308: ($0) => { var str = UTF8ToString($0) + '\n\n' + 'Abort/Retry/Ignore/AlwaysIgnore? [ariA] :'; var reply = window.prompt(str, "i"); if (reply === null) { reply = "i"; } return allocate(intArrayFromString(reply), 'i8', ALLOC_NORMAL); },  
- 560533: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
- 560680: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
- 560914: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { autoResumeAudioContext(SDL2.audioContext); } } return SDL2.audioContext === undefined ? -1 : 0; },  
- 561407: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
- 561475: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearTimeout(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.silenceTimer = setTimeout(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
- 563127: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vi', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); },  
- 563537: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
- 564142: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[$0 + ((j*numChannels + c) << 2) >> 2]; } } },  
- 564622: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearTimeout(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } SDL2.capture.stream = undefined; } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); SDL2.capture.scriptProcessorNode = undefined; } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); SDL2.capture.mediaStreamNode = undefined; } if (SDL2.capture.silenceBuffer !== undefined) { SDL2.capture.silenceBuffer = undefined } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); SDL2.audio.scriptProcessorNode = undefined; } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
- 565794: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Module['createContext'](Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels >> 2; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
- 567263: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels >> 2; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
- 568252: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
- 568335: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } },  
- 568404: () => { return window.innerWidth; },  
- 568434: () => { return window.innerHeight; }
+  563016: () => { FS.mkdir('/saves'); FS.mount(IDBFS, {}, '/saves'); FS.syncfs(true, function (err) { console.log(err ? err : "emscripten: /saves directory mounted"); try { ccall('start_main_loop', null); } catch(e) { if (e != 'unwind') throw e; } }); },  
+ 563250: ($0) => { if ($0) { document.documentElement.requestFullscreen(); } else { document.exitFullscreen(); } },  
+ 563348: ($0) => { var str = UTF8ToString($0) + '\n\n' + 'Abort/Retry/Ignore/AlwaysIgnore? [ariA] :'; var reply = window.prompt(str, "i"); if (reply === null) { reply = "i"; } return allocate(intArrayFromString(reply), 'i8', ALLOC_NORMAL); },  
+ 563573: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
+ 563720: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
+ 563954: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { autoResumeAudioContext(SDL2.audioContext); } } return SDL2.audioContext === undefined ? -1 : 0; },  
+ 564447: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
+ 564515: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearTimeout(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.silenceTimer = setTimeout(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
+ 566167: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vi', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); },  
+ 566577: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
+ 567182: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[$0 + ((j*numChannels + c) << 2) >> 2]; } } },  
+ 567662: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearTimeout(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } SDL2.capture.stream = undefined; } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); SDL2.capture.scriptProcessorNode = undefined; } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); SDL2.capture.mediaStreamNode = undefined; } if (SDL2.capture.silenceBuffer !== undefined) { SDL2.capture.silenceBuffer = undefined } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); SDL2.audio.scriptProcessorNode = undefined; } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
+ 568834: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Module['createContext'](Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels >> 2; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
+ 570303: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels >> 2; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
+ 571292: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
+ 571375: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } },  
+ 571444: () => { return window.innerWidth; },  
+ 571474: () => { return window.innerHeight; }
 };
 
 // end include: preamble.js
@@ -911,7 +893,7 @@ var ASM_CONSTS = {
             Browser.setImmediate = /** @type{function(function(): ?, ...?): number} */(function Browser_emulated_setImmediate(func) {
               setImmediates.push(func);
               if (ENVIRONMENT_IS_WORKER) {
-                if (Module['setImmediates'] === undefined) Module['setImmediates'] = [];
+                Module['setImmediates'] ??= [];
                 Module['setImmediates'].push(func);
                 postMessage({target: emscriptenMainLoopMessageId}); // In --proxy-to-worker, route the message via proxyClient.js
               } else postMessage(emscriptenMainLoopMessageId, "*"); // On the main thread, can just send the message to itself.
@@ -1755,7 +1737,7 @@ var ASM_CONSTS = {
 
   var stackSave = () => _emscripten_stack_get_current();
 
-  var UTF8Decoder = typeof TextDecoder != 'undefined' ? new TextDecoder('utf8') : undefined;
+  var UTF8Decoder = typeof TextDecoder != 'undefined' ? new TextDecoder() : undefined;
   
     /**
      * Given a pointer 'idx' to a null-terminated UTF8-encoded string in the given
@@ -2599,16 +2581,19 @@ var ASM_CONSTS = {
   /** @param {boolean=} noRunDep */
   var asyncLoad = (url, onload, onerror, noRunDep) => {
       var dep = !noRunDep ? getUniqueRunDependency(`al ${url}`) : '';
-      readAsync(url, (arrayBuffer) => {
-        onload(new Uint8Array(arrayBuffer));
-        if (dep) removeRunDependency(dep);
-      }, (event) => {
-        if (onerror) {
-          onerror();
-        } else {
-          throw `Loading data file "${url}" failed.`;
+      readAsync(url).then(
+        (arrayBuffer) => {
+          onload(new Uint8Array(arrayBuffer));
+          if (dep) removeRunDependency(dep);
+        },
+        (err) => {
+          if (onerror) {
+            onerror();
+          } else {
+            throw `Loading data file "${url}" failed.`;
+          }
         }
-      });
+      );
       if (dep) addRunDependency(dep);
     };
   
@@ -4443,18 +4428,13 @@ var ASM_CONSTS = {
         if (obj.isDevice || obj.isFolder || obj.link || obj.contents) return true;
         if (typeof XMLHttpRequest != 'undefined') {
           throw new Error("Lazy loading should have been performed (contents set) in createLazyFile, but it was not. Lazy loading only works in web workers. Use --embed-file or --preload-file in emcc on the main thread.");
-        } else if (read_) {
-          // Command-line.
+        } else { // Command-line.
           try {
-            // WARNING: Can't read binary files in V8's d8 or tracemonkey's js, as
-            //          read() will try to parse UTF8.
-            obj.contents = intArrayFromString(read_(obj.url), true);
+            obj.contents = readBinary(obj.url);
             obj.usedBytes = obj.contents.length;
           } catch (e) {
             throw new FS.ErrnoError(29);
           }
-        } else {
-          throw new Error('Cannot load without read() or XMLHttpRequest.');
         }
       },
   createLazyFile(parent, name, url, canRead, canWrite) {
@@ -4878,6 +4858,47 @@ var ASM_CONSTS = {
 
   var __emscripten_throw_longjmp = () => {
       throw Infinity;
+    };
+
+  var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
+      return stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
+    };
+  var __tzset_js = (timezone, daylight, std_name, dst_name) => {
+      // TODO: Use (malleable) environment variables instead of system settings.
+      var currentYear = new Date().getFullYear();
+      var winter = new Date(currentYear, 0, 1);
+      var summer = new Date(currentYear, 6, 1);
+      var winterOffset = winter.getTimezoneOffset();
+      var summerOffset = summer.getTimezoneOffset();
+  
+      // Local standard timezone offset. Local standard time is not adjusted for
+      // daylight savings.  This code uses the fact that getTimezoneOffset returns
+      // a greater value during Standard Time versus Daylight Saving Time (DST).
+      // Thus it determines the expected output during Standard Time, and it
+      // compares whether the output of the given date the same (Standard) or less
+      // (DST).
+      var stdTimezoneOffset = Math.max(winterOffset, summerOffset);
+  
+      // timezone is specified as seconds west of UTC ("The external variable
+      // `timezone` shall be set to the difference, in seconds, between
+      // Coordinated Universal Time (UTC) and local standard time."), the same
+      // as returned by stdTimezoneOffset.
+      // See http://pubs.opengroup.org/onlinepubs/009695399/functions/tzset.html
+      HEAPU32[((timezone)>>2)] = stdTimezoneOffset * 60;
+  
+      HEAP32[((daylight)>>2)] = Number(winterOffset != summerOffset);
+  
+      var extractZone = (date) => date.toLocaleTimeString(undefined, {hour12:false, timeZoneName:'short'}).split(' ')[1];
+      var winterName = extractZone(winter);
+      var summerName = extractZone(summer);
+      if (summerOffset < winterOffset) {
+        // Northern hemisphere
+        stringToUTF8(winterName, std_name, 17);
+        stringToUTF8(summerName, dst_name, 17);
+      } else {
+        stringToUTF8(winterName, dst_name, 17);
+        stringToUTF8(summerName, std_name, 17);
+      }
     };
 
   
@@ -5464,9 +5485,6 @@ var ASM_CONSTS = {
     };
 
   
-  var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
-      return stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
-    };
   
   var stringToNewUTF8 = (str) => {
       var size = lengthBytesUTF8(str) + 1;
@@ -5620,8 +5638,7 @@ var ASM_CONSTS = {
           return true;
         }
         // Test if the given call was already queued, and if so, don't add it again.
-        for (var i in JSEvents.deferredCalls) {
-          var call = JSEvents.deferredCalls[i];
+        for (var call of JSEvents.deferredCalls) {
           if (call.targetFunction == targetFunction && arraysHaveEqualContent(call.argsList, argsList)) {
             return;
           }
@@ -5635,12 +5652,7 @@ var ASM_CONSTS = {
         JSEvents.deferredCalls.sort((x,y) => x.precedence < y.precedence);
       },
   removeDeferredCalls(targetFunction) {
-        for (var i = 0; i < JSEvents.deferredCalls.length; ++i) {
-          if (JSEvents.deferredCalls[i].targetFunction == targetFunction) {
-            JSEvents.deferredCalls.splice(i, 1);
-            --i;
-          }
-        }
+        JSEvents.deferredCalls = JSEvents.deferredCalls.filter((call) => call.targetFunction != targetFunction);
       },
   canPerformEventHandlerRequests() {
         if (navigator.userActivation) {
@@ -5658,10 +5670,9 @@ var ASM_CONSTS = {
         if (!JSEvents.canPerformEventHandlerRequests()) {
           return;
         }
-        for (var i = 0; i < JSEvents.deferredCalls.length; ++i) {
-          var call = JSEvents.deferredCalls[i];
-          JSEvents.deferredCalls.splice(i, 1);
-          --i;
+        var deferredCalls = JSEvents.deferredCalls;
+        JSEvents.deferredCalls = [];
+        for (var call of deferredCalls) {
           call.targetFunction(...call.argsList);
         }
       },
@@ -6062,19 +6073,19 @@ var ASM_CONSTS = {
       }
       for (var i = 0; i < e.buttons.length; ++i) {
         if (typeof e.buttons[i] == 'object') {
-          HEAP32[(((eventStruct+i*4)+(1040))>>2)] = e.buttons[i].pressed;
+          HEAP8[(eventStruct+i)+(1040)] = e.buttons[i].pressed;
         } else {
           // Assigning a boolean to HEAP32, that's ok, but Closure would like to warn about it:
           /** @suppress {checkTypes} */
-          HEAP32[(((eventStruct+i*4)+(1040))>>2)] = e.buttons[i] == 1;
+          HEAP8[(eventStruct+i)+(1040)] = e.buttons[i] == 1;
         }
       }
-      HEAP32[(((eventStruct)+(1296))>>2)] = e.connected;
-      HEAP32[(((eventStruct)+(1300))>>2)] = e.index;
+      HEAP8[(eventStruct)+(1104)] = e.connected;
+      HEAP32[(((eventStruct)+(1108))>>2)] = e.index;
       HEAP32[(((eventStruct)+(8))>>2)] = e.axes.length;
       HEAP32[(((eventStruct)+(12))>>2)] = e.buttons.length;
-      stringToUTF8(e.id, eventStruct + 1304, 64);
-      stringToUTF8(e.mapping, eventStruct + 1368, 64);
+      stringToUTF8(e.id, eventStruct + 1112, 64);
+      stringToUTF8(e.mapping, eventStruct + 1176, 64);
     };
   var _emscripten_get_gamepad_status = (index, gamepadState) => {
       // INVALID_PARAM is returned on a Gamepad index that never was there.
@@ -8851,10 +8862,9 @@ var ASM_CONSTS = {
         return -3;
       }
   
-      var canPerformRequests = JSEvents.canPerformEventHandlerRequests();
-  
-      // Queue this function call if we're not currently in an event handler and the user saw it appropriate to do so.
-      if (!canPerformRequests) {
+      // Queue this function call if we're not currently in an event handler and
+      // the user saw it appropriate to do so.
+      if (!JSEvents.canPerformEventHandlerRequests()) {
         if (strategy.deferUntilInEventHandler) {
           JSEvents.deferCall(JSEvents_requestFullscreen, 1 /* priority over pointer lock */, [target, strategy]);
           return 1;
@@ -8889,10 +8899,9 @@ var ASM_CONSTS = {
         return -1;
       }
   
-      var canPerformRequests = JSEvents.canPerformEventHandlerRequests();
-  
-      // Queue this function call if we're not currently in an event handler and the user saw it appropriate to do so.
-      if (!canPerformRequests) {
+      // Queue this function call if we're not currently in an event handler and
+      // the user saw it appropriate to do so.
+      if (!JSEvents.canPerformEventHandlerRequests()) {
         if (deferUntilInEventHandler) {
           JSEvents.deferCall(requestPointerLock, 2 /* priority below fullscreen */, [target]);
           return 1;
@@ -9068,19 +9077,19 @@ var ASM_CONSTS = {
       var isFullscreen = !!fullscreenElement;
       // Assigning a boolean to HEAP32 with expected type coercion.
       /** @suppress{checkTypes} */
-      HEAP32[((eventStruct)>>2)] = isFullscreen;
-      HEAP32[(((eventStruct)+(4))>>2)] = JSEvents.fullscreenEnabled();
+      HEAP8[eventStruct] = isFullscreen;
+      HEAP8[(eventStruct)+(1)] = JSEvents.fullscreenEnabled();
       // If transitioning to fullscreen, report info about the element that is now fullscreen.
       // If transitioning to windowed mode, report info about the element that just was fullscreen.
       var reportedElement = isFullscreen ? fullscreenElement : JSEvents.previousFullscreenElement;
       var nodeName = JSEvents.getNodeNameForTarget(reportedElement);
       var id = reportedElement?.id || '';
-      stringToUTF8(nodeName, eventStruct + 8, 128);
-      stringToUTF8(id, eventStruct + 136, 128);
-      HEAP32[(((eventStruct)+(264))>>2)] = reportedElement ? reportedElement.clientWidth : 0;
-      HEAP32[(((eventStruct)+(268))>>2)] = reportedElement ? reportedElement.clientHeight : 0;
-      HEAP32[(((eventStruct)+(272))>>2)] = screen.width;
-      HEAP32[(((eventStruct)+(276))>>2)] = screen.height;
+      stringToUTF8(nodeName, eventStruct + 2, 128);
+      stringToUTF8(id, eventStruct + 130, 128);
+      HEAP32[(((eventStruct)+(260))>>2)] = reportedElement ? reportedElement.clientWidth : 0;
+      HEAP32[(((eventStruct)+(264))>>2)] = reportedElement ? reportedElement.clientHeight : 0;
+      HEAP32[(((eventStruct)+(268))>>2)] = screen.width;
+      HEAP32[(((eventStruct)+(272))>>2)] = screen.height;
       if (isFullscreen) {
         JSEvents.previousFullscreenElement = fullscreenElement;
       }
@@ -9089,7 +9098,7 @@ var ASM_CONSTS = {
   
   
   var registerFullscreenChangeEventCallback = (target, userData, useCapture, callbackfunc, eventTypeId, eventTypeString, targetThread) => {
-      if (!JSEvents.fullscreenChangeEvent) JSEvents.fullscreenChangeEvent = _malloc(280);
+      if (!JSEvents.fullscreenChangeEvent) JSEvents.fullscreenChangeEvent = _malloc(276);
   
       var fullscreenChangeEventhandlerFunc = (e = event) => {
         var fullscreenChangeEvent = JSEvents.fullscreenChangeEvent;
@@ -9127,7 +9136,7 @@ var ASM_CONSTS = {
   
   
   var registerGamepadEventCallback = (target, userData, useCapture, callbackfunc, eventTypeId, eventTypeString, targetThread) => {
-      if (!JSEvents.gamepadEvent) JSEvents.gamepadEvent = _malloc(1432);
+      if (!JSEvents.gamepadEvent) JSEvents.gamepadEvent = _malloc(1240);
   
       var gamepadEventHandlerFunc = (e = event) => {
         var gamepadEvent = JSEvents.gamepadEvent;
@@ -9163,28 +9172,28 @@ var ASM_CONSTS = {
   
   
   var registerKeyEventCallback = (target, userData, useCapture, callbackfunc, eventTypeId, eventTypeString, targetThread) => {
-      if (!JSEvents.keyEvent) JSEvents.keyEvent = _malloc(176);
+      if (!JSEvents.keyEvent) JSEvents.keyEvent = _malloc(160);
   
       var keyEventHandlerFunc = (e) => {
   
         var keyEventData = JSEvents.keyEvent;
         HEAPF64[((keyEventData)>>3)] = e.timeStamp;
   
-        var idx =((keyEventData)>>2);
+        var idx = ((keyEventData)>>2);
   
         HEAP32[idx + 2] = e.location;
-        HEAP32[idx + 3] = e.ctrlKey;
-        HEAP32[idx + 4] = e.shiftKey;
-        HEAP32[idx + 5] = e.altKey;
-        HEAP32[idx + 6] = e.metaKey;
-        HEAP32[idx + 7] = e.repeat;
-        HEAP32[idx + 8] = e.charCode;
-        HEAP32[idx + 9] = e.keyCode;
-        HEAP32[idx + 10] = e.which;
-        stringToUTF8(e.key || '', keyEventData + 44, 32);
-        stringToUTF8(e.code || '', keyEventData + 76, 32);
-        stringToUTF8(e.char || '', keyEventData + 108, 32);
-        stringToUTF8(e.locale || '', keyEventData + 140, 32);
+        HEAP8[keyEventData + 12] = e.ctrlKey;
+        HEAP8[keyEventData + 13] = e.shiftKey;
+        HEAP8[keyEventData + 14] = e.altKey;
+        HEAP8[keyEventData + 15] = e.metaKey;
+        HEAP8[keyEventData + 16] = e.repeat;
+        HEAP32[idx + 5] = e.charCode;
+        HEAP32[idx + 6] = e.keyCode;
+        HEAP32[idx + 7] = e.which;
+        stringToUTF8(e.key || '', keyEventData + 32, 32);
+        stringToUTF8(e.code || '', keyEventData + 64, 32);
+        stringToUTF8(e.char || '', keyEventData + 96, 32);
+        stringToUTF8(e.locale || '', keyEventData + 128, 32);
   
         if (getWasmTableEntry(callbackfunc)(eventTypeId, keyEventData, userData)) e.preventDefault();
       };
@@ -9224,30 +9233,30 @@ var ASM_CONSTS = {
       HEAP32[idx + 3] = e.screenY;
       HEAP32[idx + 4] = e.clientX;
       HEAP32[idx + 5] = e.clientY;
-      HEAP32[idx + 6] = e.ctrlKey;
-      HEAP32[idx + 7] = e.shiftKey;
-      HEAP32[idx + 8] = e.altKey;
-      HEAP32[idx + 9] = e.metaKey;
-      HEAP16[idx*2 + 20] = e.button;
-      HEAP16[idx*2 + 21] = e.buttons;
+      HEAP8[eventStruct + 24] = e.ctrlKey;
+      HEAP8[eventStruct + 25] = e.shiftKey;
+      HEAP8[eventStruct + 26] = e.altKey;
+      HEAP8[eventStruct + 27] = e.metaKey;
+      HEAP16[idx*2 + 14] = e.button;
+      HEAP16[idx*2 + 15] = e.buttons;
   
-      HEAP32[idx + 11] = e["movementX"]
+      HEAP32[idx + 8] = e["movementX"]
         ;
   
-      HEAP32[idx + 12] = e["movementY"]
+      HEAP32[idx + 9] = e["movementY"]
         ;
   
       // Note: rect contains doubles (truncated to placate SAFE_HEAP, which is the same behaviour when writing to HEAP32 anyway)
       var rect = getBoundingClientRect(target);
-      HEAP32[idx + 13] = e.clientX - (rect.left | 0);
-      HEAP32[idx + 14] = e.clientY - (rect.top  | 0);
+      HEAP32[idx + 10] = e.clientX - (rect.left | 0);
+      HEAP32[idx + 11] = e.clientY - (rect.top  | 0);
   
     };
   
   
   
   var registerMouseEventCallback = (target, userData, useCapture, callbackfunc, eventTypeId, eventTypeString, targetThread) => {
-      if (!JSEvents.mouseEvent) JSEvents.mouseEvent = _malloc(72);
+      if (!JSEvents.mouseEvent) JSEvents.mouseEvent = _malloc(64);
       target = findEventTarget(target);
   
       var mouseEventHandlerFunc = (e = event) => {
@@ -9290,17 +9299,17 @@ var ASM_CONSTS = {
       var isPointerlocked = !!pointerLockElement;
       // Assigning a boolean to HEAP32 with expected type coercion.
       /** @suppress{checkTypes} */
-      HEAP32[((eventStruct)>>2)] = isPointerlocked;
+      HEAP8[eventStruct] = isPointerlocked;
       var nodeName = JSEvents.getNodeNameForTarget(pointerLockElement);
       var id = pointerLockElement?.id || '';
-      stringToUTF8(nodeName, eventStruct + 4, 128);
-      stringToUTF8(id, eventStruct + 132, 128);
+      stringToUTF8(nodeName, eventStruct + 1, 128);
+      stringToUTF8(id, eventStruct + 129, 128);
     };
   
   
   
   var registerPointerlockChangeEventCallback = (target, userData, useCapture, callbackfunc, eventTypeId, eventTypeString, targetThread) => {
-      if (!JSEvents.pointerlockChangeEvent) JSEvents.pointerlockChangeEvent = _malloc(260);
+      if (!JSEvents.pointerlockChangeEvent) JSEvents.pointerlockChangeEvent = _malloc(257);
   
       var pointerlockChangeEventHandlerFunc = (e = event) => {
         var pointerlockChangeEvent = JSEvents.pointerlockChangeEvent;
@@ -9386,7 +9395,7 @@ var ASM_CONSTS = {
   
   
   var registerTouchEventCallback = (target, userData, useCapture, callbackfunc, eventTypeId, eventTypeString, targetThread) => {
-      if (!JSEvents.touchEvent) JSEvents.touchEvent = _malloc(1696);
+      if (!JSEvents.touchEvent) JSEvents.touchEvent = _malloc(1552);
   
       target = findEventTarget(target);
   
@@ -9396,49 +9405,46 @@ var ASM_CONSTS = {
         // only changed touches in e.changedTouches, and touches on target at a.targetTouches), mark a boolean in
         // each Touch object so that we can later loop only once over all touches we see to marshall over to Wasm.
   
-        for (var i = 0; i < et.length; ++i) {
-          t = et[i];
+        for (let t of et) {
           // Browser might recycle the generated Touch objects between each frame (Firefox on Android), so reset any
           // changed/target states we may have set from previous frame.
           t.isChanged = t.onTarget = 0;
           touches[t.identifier] = t;
         }
         // Mark which touches are part of the changedTouches list.
-        for (var i = 0; i < e.changedTouches.length; ++i) {
-          t = e.changedTouches[i];
+        for (let t of e.changedTouches) {
           t.isChanged = 1;
           touches[t.identifier] = t;
         }
         // Mark which touches are part of the targetTouches list.
-        for (var i = 0; i < e.targetTouches.length; ++i) {
-          touches[e.targetTouches[i].identifier].onTarget = 1;
+        for (let t of e.targetTouches) {
+          touches[t.identifier].onTarget = 1;
         }
   
         var touchEvent = JSEvents.touchEvent;
         HEAPF64[((touchEvent)>>3)] = e.timeStamp;
-        var idx =((touchEvent)>>2);// Pre-shift the ptr to index to HEAP32 to save code size
-        HEAP32[idx + 3] = e.ctrlKey;
-        HEAP32[idx + 4] = e.shiftKey;
-        HEAP32[idx + 5] = e.altKey;
-        HEAP32[idx + 6] = e.metaKey;
-        idx += 7; // Advance to the start of the touch array.
+        HEAP8[touchEvent + 12] = e.ctrlKey;
+        HEAP8[touchEvent + 13] = e.shiftKey;
+        HEAP8[touchEvent + 14] = e.altKey;
+        HEAP8[touchEvent + 15] = e.metaKey;
+        var idx = touchEvent + 16;
         var targetRect = getBoundingClientRect(target);
         var numTouches = 0;
-        for (var i in touches) {
-          t = touches[i];
-          HEAP32[idx + 0] = t.identifier;
-          HEAP32[idx + 1] = t.screenX;
-          HEAP32[idx + 2] = t.screenY;
-          HEAP32[idx + 3] = t.clientX;
-          HEAP32[idx + 4] = t.clientY;
-          HEAP32[idx + 5] = t.pageX;
-          HEAP32[idx + 6] = t.pageY;
-          HEAP32[idx + 7] = t.isChanged;
-          HEAP32[idx + 8] = t.onTarget;
-          HEAP32[idx + 9] = t.clientX - (targetRect.left | 0);
-          HEAP32[idx + 10] = t.clientY - (targetRect.top  | 0);
+        for (let t of Object.values(touches)) {
+          var idx32 = ((idx)>>2); // Pre-shift the ptr to index to HEAP32 to save code size
+          HEAP32[idx32 + 0] = t.identifier;
+          HEAP32[idx32 + 1] = t.screenX;
+          HEAP32[idx32 + 2] = t.screenY;
+          HEAP32[idx32 + 3] = t.clientX;
+          HEAP32[idx32 + 4] = t.clientY;
+          HEAP32[idx32 + 5] = t.pageX;
+          HEAP32[idx32 + 6] = t.pageY;
+          HEAP8[idx + 28] = t.isChanged;
+          HEAP8[idx + 29] = t.onTarget;
+          HEAP32[idx32 + 8] = t.clientX - (targetRect.left | 0);
+          HEAP32[idx32 + 9] = t.clientY - (targetRect.top  | 0);
   
-          idx += 13;
+          idx += 48;
   
           if (++numTouches > 31) {
             break;
@@ -9478,7 +9484,7 @@ var ASM_CONSTS = {
   
       // Assigning a boolean to HEAP32 with expected type coercion.
       /** @suppress{checkTypes} */
-      HEAP32[((eventStruct)>>2)] = document.hidden;
+      HEAP8[eventStruct] = document.hidden;
       HEAP32[(((eventStruct)+(4))>>2)] = visibilityState;
     };
   
@@ -9518,16 +9524,16 @@ var ASM_CONSTS = {
   
   
   var registerWheelEventCallback = (target, userData, useCapture, callbackfunc, eventTypeId, eventTypeString, targetThread) => {
-      if (!JSEvents.wheelEvent) JSEvents.wheelEvent = _malloc(104);
+      if (!JSEvents.wheelEvent) JSEvents.wheelEvent = _malloc(96);
   
       // The DOM Level 3 events spec event 'wheel'
       var wheelHandlerFunc = (e = event) => {
         var wheelEvent = JSEvents.wheelEvent;
         fillMouseEventData(wheelEvent, e, target);
-        HEAPF64[(((wheelEvent)+(72))>>3)] = e["deltaX"];
-        HEAPF64[(((wheelEvent)+(80))>>3)] = e["deltaY"];
-        HEAPF64[(((wheelEvent)+(88))>>3)] = e["deltaZ"];
-        HEAP32[(((wheelEvent)+(96))>>2)] = e["deltaMode"];
+        HEAPF64[(((wheelEvent)+(64))>>3)] = e["deltaX"];
+        HEAPF64[(((wheelEvent)+(72))>>3)] = e["deltaY"];
+        HEAPF64[(((wheelEvent)+(80))>>3)] = e["deltaZ"];
+        HEAP32[(((wheelEvent)+(88))>>2)] = e["deltaMode"];
         if (getWasmTableEntry(callbackfunc)(eventTypeId, wheelEvent, userData)) e.preventDefault();
       };
   
@@ -9820,308 +9826,6 @@ var ASM_CONSTS = {
 
 
 
-  var isLeapYear = (year) => year%4 === 0 && (year%100 !== 0 || year%400 === 0);
-  
-  var arraySum = (array, index) => {
-      var sum = 0;
-      for (var i = 0; i <= index; sum += array[i++]) {
-        // no-op
-      }
-      return sum;
-    };
-  
-  
-  var MONTH_DAYS_LEAP = [31,29,31,30,31,30,31,31,30,31,30,31];
-  
-  var MONTH_DAYS_REGULAR = [31,28,31,30,31,30,31,31,30,31,30,31];
-  var addDays = (date, days) => {
-      var newDate = new Date(date.getTime());
-      while (days > 0) {
-        var leap = isLeapYear(newDate.getFullYear());
-        var currentMonth = newDate.getMonth();
-        var daysInCurrentMonth = (leap ? MONTH_DAYS_LEAP : MONTH_DAYS_REGULAR)[currentMonth];
-  
-        if (days > daysInCurrentMonth-newDate.getDate()) {
-          // we spill over to next month
-          days -= (daysInCurrentMonth-newDate.getDate()+1);
-          newDate.setDate(1);
-          if (currentMonth < 11) {
-            newDate.setMonth(currentMonth+1)
-          } else {
-            newDate.setMonth(0);
-            newDate.setFullYear(newDate.getFullYear()+1);
-          }
-        } else {
-          // we stay in current month
-          newDate.setDate(newDate.getDate()+days);
-          return newDate;
-        }
-      }
-  
-      return newDate;
-    };
-  
-  
-  
-  
-  var writeArrayToMemory = (array, buffer) => {
-      HEAP8.set(array, buffer);
-    };
-  
-  var _strftime = (s, maxsize, format, tm) => {
-      // size_t strftime(char *restrict s, size_t maxsize, const char *restrict format, const struct tm *restrict timeptr);
-      // http://pubs.opengroup.org/onlinepubs/009695399/functions/strftime.html
-  
-      var tm_zone = HEAPU32[(((tm)+(40))>>2)];
-  
-      var date = {
-        tm_sec: HEAP32[((tm)>>2)],
-        tm_min: HEAP32[(((tm)+(4))>>2)],
-        tm_hour: HEAP32[(((tm)+(8))>>2)],
-        tm_mday: HEAP32[(((tm)+(12))>>2)],
-        tm_mon: HEAP32[(((tm)+(16))>>2)],
-        tm_year: HEAP32[(((tm)+(20))>>2)],
-        tm_wday: HEAP32[(((tm)+(24))>>2)],
-        tm_yday: HEAP32[(((tm)+(28))>>2)],
-        tm_isdst: HEAP32[(((tm)+(32))>>2)],
-        tm_gmtoff: HEAP32[(((tm)+(36))>>2)],
-        tm_zone: tm_zone ? UTF8ToString(tm_zone) : ''
-      };
-      
-  
-      var pattern = UTF8ToString(format);
-  
-      // expand format
-      var EXPANSION_RULES_1 = {
-        '%c': '%a %b %d %H:%M:%S %Y',     // Replaced by the locale's appropriate date and time representation - e.g., Mon Aug  3 14:02:01 2013
-        '%D': '%m/%d/%y',                 // Equivalent to %m / %d / %y
-        '%F': '%Y-%m-%d',                 // Equivalent to %Y - %m - %d
-        '%h': '%b',                       // Equivalent to %b
-        '%r': '%I:%M:%S %p',              // Replaced by the time in a.m. and p.m. notation
-        '%R': '%H:%M',                    // Replaced by the time in 24-hour notation
-        '%T': '%H:%M:%S',                 // Replaced by the time
-        '%x': '%m/%d/%y',                 // Replaced by the locale's appropriate date representation
-        '%X': '%H:%M:%S',                 // Replaced by the locale's appropriate time representation
-        // Modified Conversion Specifiers
-        '%Ec': '%c',                      // Replaced by the locale's alternative appropriate date and time representation.
-        '%EC': '%C',                      // Replaced by the name of the base year (period) in the locale's alternative representation.
-        '%Ex': '%m/%d/%y',                // Replaced by the locale's alternative date representation.
-        '%EX': '%H:%M:%S',                // Replaced by the locale's alternative time representation.
-        '%Ey': '%y',                      // Replaced by the offset from %EC (year only) in the locale's alternative representation.
-        '%EY': '%Y',                      // Replaced by the full alternative year representation.
-        '%Od': '%d',                      // Replaced by the day of the month, using the locale's alternative numeric symbols, filled as needed with leading zeros if there is any alternative symbol for zero; otherwise, with leading <space> characters.
-        '%Oe': '%e',                      // Replaced by the day of the month, using the locale's alternative numeric symbols, filled as needed with leading <space> characters.
-        '%OH': '%H',                      // Replaced by the hour (24-hour clock) using the locale's alternative numeric symbols.
-        '%OI': '%I',                      // Replaced by the hour (12-hour clock) using the locale's alternative numeric symbols.
-        '%Om': '%m',                      // Replaced by the month using the locale's alternative numeric symbols.
-        '%OM': '%M',                      // Replaced by the minutes using the locale's alternative numeric symbols.
-        '%OS': '%S',                      // Replaced by the seconds using the locale's alternative numeric symbols.
-        '%Ou': '%u',                      // Replaced by the weekday as a number in the locale's alternative representation (Monday=1).
-        '%OU': '%U',                      // Replaced by the week number of the year (Sunday as the first day of the week, rules corresponding to %U ) using the locale's alternative numeric symbols.
-        '%OV': '%V',                      // Replaced by the week number of the year (Monday as the first day of the week, rules corresponding to %V ) using the locale's alternative numeric symbols.
-        '%Ow': '%w',                      // Replaced by the number of the weekday (Sunday=0) using the locale's alternative numeric symbols.
-        '%OW': '%W',                      // Replaced by the week number of the year (Monday as the first day of the week) using the locale's alternative numeric symbols.
-        '%Oy': '%y',                      // Replaced by the year (offset from %C ) using the locale's alternative numeric symbols.
-      };
-      for (var rule in EXPANSION_RULES_1) {
-        pattern = pattern.replace(new RegExp(rule, 'g'), EXPANSION_RULES_1[rule]);
-      }
-  
-      var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  
-      function leadingSomething(value, digits, character) {
-        var str = typeof value == 'number' ? value.toString() : (value || '');
-        while (str.length < digits) {
-          str = character[0]+str;
-        }
-        return str;
-      }
-  
-      function leadingNulls(value, digits) {
-        return leadingSomething(value, digits, '0');
-      }
-  
-      function compareByDay(date1, date2) {
-        function sgn(value) {
-          return value < 0 ? -1 : (value > 0 ? 1 : 0);
-        }
-  
-        var compare;
-        if ((compare = sgn(date1.getFullYear()-date2.getFullYear())) === 0) {
-          if ((compare = sgn(date1.getMonth()-date2.getMonth())) === 0) {
-            compare = sgn(date1.getDate()-date2.getDate());
-          }
-        }
-        return compare;
-      }
-  
-      function getFirstWeekStartDate(janFourth) {
-          switch (janFourth.getDay()) {
-            case 0: // Sunday
-              return new Date(janFourth.getFullYear()-1, 11, 29);
-            case 1: // Monday
-              return janFourth;
-            case 2: // Tuesday
-              return new Date(janFourth.getFullYear(), 0, 3);
-            case 3: // Wednesday
-              return new Date(janFourth.getFullYear(), 0, 2);
-            case 4: // Thursday
-              return new Date(janFourth.getFullYear(), 0, 1);
-            case 5: // Friday
-              return new Date(janFourth.getFullYear()-1, 11, 31);
-            case 6: // Saturday
-              return new Date(janFourth.getFullYear()-1, 11, 30);
-          }
-      }
-  
-      function getWeekBasedYear(date) {
-          var thisDate = addDays(new Date(date.tm_year+1900, 0, 1), date.tm_yday);
-  
-          var janFourthThisYear = new Date(thisDate.getFullYear(), 0, 4);
-          var janFourthNextYear = new Date(thisDate.getFullYear()+1, 0, 4);
-  
-          var firstWeekStartThisYear = getFirstWeekStartDate(janFourthThisYear);
-          var firstWeekStartNextYear = getFirstWeekStartDate(janFourthNextYear);
-  
-          if (compareByDay(firstWeekStartThisYear, thisDate) <= 0) {
-            // this date is after the start of the first week of this year
-            if (compareByDay(firstWeekStartNextYear, thisDate) <= 0) {
-              return thisDate.getFullYear()+1;
-            }
-            return thisDate.getFullYear();
-          }
-          return thisDate.getFullYear()-1;
-      }
-  
-      var EXPANSION_RULES_2 = {
-        '%a': (date) => WEEKDAYS[date.tm_wday].substring(0,3) ,
-        '%A': (date) => WEEKDAYS[date.tm_wday],
-        '%b': (date) => MONTHS[date.tm_mon].substring(0,3),
-        '%B': (date) => MONTHS[date.tm_mon],
-        '%C': (date) => {
-          var year = date.tm_year+1900;
-          return leadingNulls((year/100)|0,2);
-        },
-        '%d': (date) => leadingNulls(date.tm_mday, 2),
-        '%e': (date) => leadingSomething(date.tm_mday, 2, ' '),
-        '%g': (date) => {
-          // %g, %G, and %V give values according to the ISO 8601:2000 standard week-based year.
-          // In this system, weeks begin on a Monday and week 1 of the year is the week that includes
-          // January 4th, which is also the week that includes the first Thursday of the year, and
-          // is also the first week that contains at least four days in the year.
-          // If the first Monday of January is the 2nd, 3rd, or 4th, the preceding days are part of
-          // the last week of the preceding year; thus, for Saturday 2nd January 1999,
-          // %G is replaced by 1998 and %V is replaced by 53. If December 29th, 30th,
-          // or 31st is a Monday, it and any following days are part of week 1 of the following year.
-          // Thus, for Tuesday 30th December 1997, %G is replaced by 1998 and %V is replaced by 01.
-  
-          return getWeekBasedYear(date).toString().substring(2);
-        },
-        '%G': getWeekBasedYear,
-        '%H': (date) => leadingNulls(date.tm_hour, 2),
-        '%I': (date) => {
-          var twelveHour = date.tm_hour;
-          if (twelveHour == 0) twelveHour = 12;
-          else if (twelveHour > 12) twelveHour -= 12;
-          return leadingNulls(twelveHour, 2);
-        },
-        '%j': (date) => {
-          // Day of the year (001-366)
-          return leadingNulls(date.tm_mday + arraySum(isLeapYear(date.tm_year+1900) ? MONTH_DAYS_LEAP : MONTH_DAYS_REGULAR, date.tm_mon-1), 3);
-        },
-        '%m': (date) => leadingNulls(date.tm_mon+1, 2),
-        '%M': (date) => leadingNulls(date.tm_min, 2),
-        '%n': () => '\n',
-        '%p': (date) => {
-          if (date.tm_hour >= 0 && date.tm_hour < 12) {
-            return 'AM';
-          }
-          return 'PM';
-        },
-        '%S': (date) => leadingNulls(date.tm_sec, 2),
-        '%t': () => '\t',
-        '%u': (date) => date.tm_wday || 7,
-        '%U': (date) => {
-          var days = date.tm_yday + 7 - date.tm_wday;
-          return leadingNulls(Math.floor(days / 7), 2);
-        },
-        '%V': (date) => {
-          // Replaced by the week number of the year (Monday as the first day of the week)
-          // as a decimal number [01,53]. If the week containing 1 January has four
-          // or more days in the new year, then it is considered week 1.
-          // Otherwise, it is the last week of the previous year, and the next week is week 1.
-          // Both January 4th and the first Thursday of January are always in week 1. [ tm_year, tm_wday, tm_yday]
-          var val = Math.floor((date.tm_yday + 7 - (date.tm_wday + 6) % 7 ) / 7);
-          // If 1 Jan is just 1-3 days past Monday, the previous week
-          // is also in this year.
-          if ((date.tm_wday + 371 - date.tm_yday - 2) % 7 <= 2) {
-            val++;
-          }
-          if (!val) {
-            val = 52;
-            // If 31 December of prev year a Thursday, or Friday of a
-            // leap year, then the prev year has 53 weeks.
-            var dec31 = (date.tm_wday + 7 - date.tm_yday - 1) % 7;
-            if (dec31 == 4 || (dec31 == 5 && isLeapYear(date.tm_year%400-1))) {
-              val++;
-            }
-          } else if (val == 53) {
-            // If 1 January is not a Thursday, and not a Wednesday of a
-            // leap year, then this year has only 52 weeks.
-            var jan1 = (date.tm_wday + 371 - date.tm_yday) % 7;
-            if (jan1 != 4 && (jan1 != 3 || !isLeapYear(date.tm_year)))
-              val = 1;
-          }
-          return leadingNulls(val, 2);
-        },
-        '%w': (date) => date.tm_wday,
-        '%W': (date) => {
-          var days = date.tm_yday + 7 - ((date.tm_wday + 6) % 7);
-          return leadingNulls(Math.floor(days / 7), 2);
-        },
-        '%y': (date) => {
-          // Replaced by the last two digits of the year as a decimal number [00,99]. [ tm_year]
-          return (date.tm_year+1900).toString().substring(2);
-        },
-        // Replaced by the year as a decimal number (for example, 1997). [ tm_year]
-        '%Y': (date) => date.tm_year+1900,
-        '%z': (date) => {
-          // Replaced by the offset from UTC in the ISO 8601:2000 standard format ( +hhmm or -hhmm ).
-          // For example, "-0430" means 4 hours 30 minutes behind UTC (west of Greenwich).
-          var off = date.tm_gmtoff;
-          var ahead = off >= 0;
-          off = Math.abs(off) / 60;
-          // convert from minutes into hhmm format (which means 60 minutes = 100 units)
-          off = (off / 60)*100 + (off % 60);
-          return (ahead ? '+' : '-') + String("0000" + off).slice(-4);
-        },
-        '%Z': (date) => date.tm_zone,
-        '%%': () => '%'
-      };
-  
-      // Replace %% with a pair of NULLs (which cannot occur in a C string), then
-      // re-inject them after processing.
-      pattern = pattern.replace(/%%/g, '\0\0')
-      for (var rule in EXPANSION_RULES_2) {
-        if (pattern.includes(rule)) {
-          pattern = pattern.replace(new RegExp(rule, 'g'), EXPANSION_RULES_2[rule](date));
-        }
-      }
-      pattern = pattern.replace(/\0\0/g, '%')
-  
-      var bytes = intArrayFromString(pattern, false);
-      if (bytes.length > maxsize) {
-        return 0;
-      }
-  
-      writeArrayToMemory(bytes, s);
-      return bytes.length-1;
-    };
-  var _strftime_l = (s, maxsize, format, tm, loc) => {
-      return _strftime(s, maxsize, format, tm); // no locale support yet
-    };
-
 
 
 
@@ -10171,6 +9875,9 @@ var ASM_CONSTS = {
       return func;
     };
   
+  var writeArrayToMemory = (array, buffer) => {
+      HEAP8.set(array, buffer);
+    };
   
   
   
@@ -10278,6 +9985,8 @@ var wasmImports = {
   _emscripten_memcpy_js: __emscripten_memcpy_js,
   /** @export */
   _emscripten_throw_longjmp: __emscripten_throw_longjmp,
+  /** @export */
+  _tzset_js: __tzset_js,
   /** @export */
   eglBindAPI: _eglBindAPI,
   /** @export */
@@ -11163,9 +10872,7 @@ var wasmImports = {
   /** @export */
   invoke_vi,
   /** @export */
-  invoke_viiii,
-  /** @export */
-  strftime_l: _strftime_l
+  invoke_viiii
 };
 var wasmExports = createWasm();
 var ___wasm_call_ctors = () => (___wasm_call_ctors = wasmExports['__wasm_call_ctors'])();
@@ -11317,7 +11024,7 @@ function run(args = arguments_) {
 
     preMain();
 
-    if (Module['onRuntimeInitialized']) Module['onRuntimeInitialized']();
+    Module['onRuntimeInitialized']?.();
 
     if (shouldRunNow) callMain(args);
 

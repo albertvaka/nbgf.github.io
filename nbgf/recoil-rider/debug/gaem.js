@@ -31,7 +31,7 @@ if (ENVIRONMENT_IS_NODE) {
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: /tmp/tmpkboin06y.js
+// include: /tmp/tmpjhtwtn9s.js
 
   Module['expectedDataFileDownloads'] ??= 0;
   Module['expectedDataFileDownloads']++;
@@ -215,7 +215,7 @@ Module['FS_createPath']("/", "data", true, true);
 
   })();
 
-// end include: /tmp/tmpkboin06y.js
+// end include: /tmp/tmpjhtwtn9s.js
 
 
 // Sometimes an existing Module object exists with properties
@@ -443,15 +443,6 @@ var HEAP,
 
 var runtimeInitialized = false;
 
-// Prefix of data URIs emitted by SINGLE_FILE and related options.
-var dataURIPrefix = 'data:application/octet-stream;base64,';
-
-/**
- * Indicates whether filename is a base64 data URI.
- * @noinline
- */
-var isDataURI = (filename) => filename.startsWith(dataURIPrefix);
-
 /**
  * Indicates whether filename is delivered via file protocol (as opposed to http/https)
  * @noinline
@@ -484,12 +475,6 @@ function updateMemoryViews() {
 }
 
 // end include: runtime_shared.js
-var __ATPRERUN__  = []; // functions called before the runtime is initialized
-var __ATINIT__    = []; // functions called during startup
-var __ATMAIN__    = []; // functions called when main() is to be run
-var __ATEXIT__    = []; // functions called during shutdown
-var __ATPOSTRUN__ = []; // functions called after the main() is called
-
 function preRun() {
   if (Module['preRun']) {
     if (typeof Module['preRun'] == 'function') Module['preRun'] = [Module['preRun']];
@@ -497,24 +482,22 @@ function preRun() {
       addOnPreRun(Module['preRun'].shift());
     }
   }
-  callRuntimeCallbacks(__ATPRERUN__);
+  callRuntimeCallbacks(onPreRuns);
 }
 
 function initRuntime() {
   runtimeInitialized = true;
 
-  
-if (!Module['noFSInit'] && !FS.initialized)
-  FS.init();
-FS.ignorePermissions = false;
-
+  if (!Module['noFSInit'] && !FS.initialized) FS.init();
 TTY.init();
-  callRuntimeCallbacks(__ATINIT__);
+
+  wasmExports['__wasm_call_ctors']();
+
+  FS.ignorePermissions = false;
 }
 
 function preMain() {
   
-  callRuntimeCallbacks(__ATMAIN__);
 }
 
 function postRun() {
@@ -526,26 +509,7 @@ function postRun() {
     }
   }
 
-  callRuntimeCallbacks(__ATPOSTRUN__);
-}
-
-function addOnPreRun(cb) {
-  __ATPRERUN__.unshift(cb);
-}
-
-function addOnInit(cb) {
-  __ATINIT__.unshift(cb);
-}
-
-function addOnPreMain(cb) {
-  __ATMAIN__.unshift(cb);
-}
-
-function addOnExit(cb) {
-}
-
-function addOnPostRun(cb) {
-  __ATPOSTRUN__.unshift(cb);
+  callRuntimeCallbacks(onPostRuns);
 }
 
 // A counter of dependencies for calling run(). If we need to
@@ -620,11 +584,7 @@ function abort(what) {
 
 var wasmBinaryFile;
 function findWasmBinary() {
-    var f = 'gaem.wasm';
-    if (!isDataURI(f)) {
-      return locateFile(f);
-    }
-    return f;
+    return locateFile('gaem.wasm');
 }
 
 function getBinarySync(file) {
@@ -666,9 +626,7 @@ async function instantiateArrayBuffer(binaryFile, imports) {
 }
 
 async function instantiateAsync(binary, binaryFile, imports) {
-  if (!binary &&
-      typeof WebAssembly.instantiateStreaming == 'function' &&
-      !isDataURI(binaryFile)
+  if (!binary && typeof WebAssembly.instantiateStreaming == 'function'
       // Don't use streaming for file:// delivered objects in a webview, fetch them synchronously.
       && !isFileURI(binaryFile)
       // Avoid instantiateStreaming() on Node.js environment for now, as while
@@ -721,8 +679,6 @@ async function createWasm() {
     wasmTable = wasmExports['__indirect_function_table'];
     
 
-    addOnInit(wasmExports['__wasm_call_ctors']);
-
     removeRunDependency('wasm-instantiate');
     return wasmExports;
   }
@@ -747,12 +703,12 @@ async function createWasm() {
   // Also pthreads and wasm workers initialize the wasm instance through this
   // path.
   if (Module['instantiateWasm']) {
-    try {
-      return Module['instantiateWasm'](info, receiveInstance);
-    } catch(e) {
-      err(`Module.instantiateWasm callback failed with error: ${e}`);
-        return false;
-    }
+    return new Promise((resolve, reject) => {
+        Module['instantiateWasm'](info, (mod, inst) => {
+          receiveInstance(mod, inst);
+          resolve(mod.exports);
+        });
+    });
   }
 
   wasmBinaryFile ??= findWasmBinary();
@@ -765,25 +721,25 @@ async function createWasm() {
 // === Body ===
 
 var ASM_CONSTS = {
-  804360: () => { FS.mkdir('/saves'); FS.mount(IDBFS, {}, '/saves'); FS.syncfs(true, function (err) { console.log(err ? err : "emscripten: /saves directory mounted"); try { ccall('start_main_loop', null); } catch(e) { if (e != 'unwind') throw e; } }); },  
- 804594: () => { FS.syncfs(function (err) { if (err) console.log(err); }); },  
- 804652: ($0) => { if ($0) { document.documentElement.requestFullscreen(); } else { document.exitFullscreen(); } },  
- 804750: ($0) => { var str = UTF8ToString($0) + '\n\n' + 'Abort/Retry/Ignore/AlwaysIgnore? [ariA] :'; var reply = window.prompt(str, "i"); if (reply === null) { reply = "i"; } return allocate(intArrayFromString(reply), 'i8', ALLOC_NORMAL); },  
- 804975: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
- 805122: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
- 805356: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { if ((typeof navigator.userActivation) === 'undefined') { autoResumeAudioContext(SDL2.audioContext); } } } return SDL2.audioContext === undefined ? -1 : 0; },  
- 805908: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
- 805976: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; SDL2.capture.silenceBuffer = undefined } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
- 807669: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); SDL2.audio.silenceTimer = undefined; SDL2.audio.silenceBuffer = undefined; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vi', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); if (SDL2.audioContext.state === 'suspended') { SDL2.audio.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.audio.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { if ((typeof navigator.userActivation) !== 'undefined') { if (navigator.userActivation.hasBeenActive) { SDL2.audioContext.resume(); } } SDL2.audio.currentOutputBuffer = SDL2.audio.silenceBuffer; dynCall('vi', $2, [$3]); SDL2.audio.currentOutputBuffer = undefined; }; SDL2.audio.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); } },  
- 808844: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
- 809449: ($0, $1) => { var SDL2 = Module['SDL2']; var buf = $0 >>> 2; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[buf + (j*numChannels + c)]; } } },  
- 809938: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
- 810944: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Module['createContext'](Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
- 812412: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
- 813400: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
- 813483: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } },  
- 813552: () => { return window.innerWidth; },  
- 813582: () => { return window.innerHeight; }
+  804376: () => { FS.mkdir('/saves'); FS.mount(IDBFS, {}, '/saves'); FS.syncfs(true, function (err) { console.log(err ? err : "emscripten: /saves directory mounted"); try { ccall('start_main_loop', null); } catch(e) { if (e != 'unwind') throw e; } }); },  
+ 804610: () => { FS.syncfs(function (err) { if (err) console.log(err); }); },  
+ 804668: ($0) => { if ($0) { document.documentElement.requestFullscreen(); } else { document.exitFullscreen(); } },  
+ 804766: ($0) => { var str = UTF8ToString($0) + '\n\n' + 'Abort/Retry/Ignore/AlwaysIgnore? [ariA] :'; var reply = window.prompt(str, "i"); if (reply === null) { reply = "i"; } return allocate(intArrayFromString(reply), 'i8', ALLOC_NORMAL); },  
+ 804991: () => { if (typeof(AudioContext) !== 'undefined') { return true; } else if (typeof(webkitAudioContext) !== 'undefined') { return true; } return false; },  
+ 805138: () => { if ((typeof(navigator.mediaDevices) !== 'undefined') && (typeof(navigator.mediaDevices.getUserMedia) !== 'undefined')) { return true; } else if (typeof(navigator.webkitGetUserMedia) !== 'undefined') { return true; } return false; },  
+ 805372: ($0) => { if(typeof(Module['SDL2']) === 'undefined') { Module['SDL2'] = {}; } var SDL2 = Module['SDL2']; if (!$0) { SDL2.audio = {}; } else { SDL2.capture = {}; } if (!SDL2.audioContext) { if (typeof(AudioContext) !== 'undefined') { SDL2.audioContext = new AudioContext(); } else if (typeof(webkitAudioContext) !== 'undefined') { SDL2.audioContext = new webkitAudioContext(); } if (SDL2.audioContext) { if ((typeof navigator.userActivation) === 'undefined') { autoResumeAudioContext(SDL2.audioContext); } } } return SDL2.audioContext === undefined ? -1 : 0; },  
+ 805924: () => { var SDL2 = Module['SDL2']; return SDL2.audioContext.sampleRate; },  
+ 805992: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; var have_microphone = function(stream) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); SDL2.capture.silenceTimer = undefined; SDL2.capture.silenceBuffer = undefined } SDL2.capture.mediaStreamNode = SDL2.audioContext.createMediaStreamSource(stream); SDL2.capture.scriptProcessorNode = SDL2.audioContext.createScriptProcessor($1, $0, 1); SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) { if ((SDL2 === undefined) || (SDL2.capture === undefined)) { return; } audioProcessingEvent.outputBuffer.getChannelData(0).fill(0.0); SDL2.capture.currentCaptureBuffer = audioProcessingEvent.inputBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.mediaStreamNode.connect(SDL2.capture.scriptProcessorNode); SDL2.capture.scriptProcessorNode.connect(SDL2.audioContext.destination); SDL2.capture.stream = stream; }; var no_microphone = function(error) { }; SDL2.capture.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.capture.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { SDL2.capture.currentCaptureBuffer = SDL2.capture.silenceBuffer; dynCall('vi', $2, [$3]); }; SDL2.capture.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); if ((navigator.mediaDevices !== undefined) && (navigator.mediaDevices.getUserMedia !== undefined)) { navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(have_microphone).catch(no_microphone); } else if (navigator.webkitGetUserMedia !== undefined) { navigator.webkitGetUserMedia({ audio: true, video: false }, have_microphone, no_microphone); } },  
+ 807685: ($0, $1, $2, $3) => { var SDL2 = Module['SDL2']; SDL2.audio.scriptProcessorNode = SDL2.audioContext['createScriptProcessor']($1, 0, $0); SDL2.audio.scriptProcessorNode['onaudioprocess'] = function (e) { if ((SDL2 === undefined) || (SDL2.audio === undefined)) { return; } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); SDL2.audio.silenceTimer = undefined; SDL2.audio.silenceBuffer = undefined; } SDL2.audio.currentOutputBuffer = e['outputBuffer']; dynCall('vi', $2, [$3]); }; SDL2.audio.scriptProcessorNode['connect'](SDL2.audioContext['destination']); if (SDL2.audioContext.state === 'suspended') { SDL2.audio.silenceBuffer = SDL2.audioContext.createBuffer($0, $1, SDL2.audioContext.sampleRate); SDL2.audio.silenceBuffer.getChannelData(0).fill(0.0); var silence_callback = function() { if ((typeof navigator.userActivation) !== 'undefined') { if (navigator.userActivation.hasBeenActive) { SDL2.audioContext.resume(); } } SDL2.audio.currentOutputBuffer = SDL2.audio.silenceBuffer; dynCall('vi', $2, [$3]); SDL2.audio.currentOutputBuffer = undefined; }; SDL2.audio.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1000); } },  
+ 808860: ($0, $1) => { var SDL2 = Module['SDL2']; var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.capture.currentCaptureBuffer.getChannelData(c); if (channelData.length != $1) { throw 'Web Audio capture buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } if (numChannels == 1) { for (var j = 0; j < $1; ++j) { setValue($0 + (j * 4), channelData[j], 'float'); } } else { for (var j = 0; j < $1; ++j) { setValue($0 + (((j * numChannels) + c) * 4), channelData[j], 'float'); } } } },  
+ 809465: ($0, $1) => { var SDL2 = Module['SDL2']; var buf = $0 >>> 2; var numChannels = SDL2.audio.currentOutputBuffer['numberOfChannels']; for (var c = 0; c < numChannels; ++c) { var channelData = SDL2.audio.currentOutputBuffer['getChannelData'](c); if (channelData.length != $1) { throw 'Web Audio output buffer length mismatch! Destination size: ' + channelData.length + ' samples vs expected ' + $1 + ' samples!'; } for (var j = 0; j < $1; ++j) { channelData[j] = HEAPF32[buf + (j*numChannels + c)]; } } },  
+ 809954: ($0) => { var SDL2 = Module['SDL2']; if ($0) { if (SDL2.capture.silenceTimer !== undefined) { clearInterval(SDL2.capture.silenceTimer); } if (SDL2.capture.stream !== undefined) { var tracks = SDL2.capture.stream.getAudioTracks(); for (var i = 0; i < tracks.length; i++) { SDL2.capture.stream.removeTrack(tracks[i]); } } if (SDL2.capture.scriptProcessorNode !== undefined) { SDL2.capture.scriptProcessorNode.onaudioprocess = function(audioProcessingEvent) {}; SDL2.capture.scriptProcessorNode.disconnect(); } if (SDL2.capture.mediaStreamNode !== undefined) { SDL2.capture.mediaStreamNode.disconnect(); } SDL2.capture = undefined; } else { if (SDL2.audio.scriptProcessorNode != undefined) { SDL2.audio.scriptProcessorNode.disconnect(); } if (SDL2.audio.silenceTimer !== undefined) { clearInterval(SDL2.audio.silenceTimer); } SDL2.audio = undefined; } if ((SDL2.audioContext !== undefined) && (SDL2.audio === undefined) && (SDL2.capture === undefined)) { SDL2.audioContext.close(); SDL2.audioContext = undefined; } },  
+ 810960: ($0, $1, $2) => { var w = $0; var h = $1; var pixels = $2; if (!Module['SDL2']) Module['SDL2'] = {}; var SDL2 = Module['SDL2']; if (SDL2.ctxCanvas !== Module['canvas']) { SDL2.ctx = Module['createContext'](Module['canvas'], false, true); SDL2.ctxCanvas = Module['canvas']; } if (SDL2.w !== w || SDL2.h !== h || SDL2.imageCtx !== SDL2.ctx) { SDL2.image = SDL2.ctx.createImageData(w, h); SDL2.w = w; SDL2.h = h; SDL2.imageCtx = SDL2.ctx; } var data = SDL2.image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = 0xff; src++; dst += 4; } } else { if (SDL2.data32Data !== data) { SDL2.data32 = new Int32Array(data.buffer); SDL2.data8 = new Uint8Array(data.buffer); SDL2.data32Data = data; } var data32 = SDL2.data32; num = data32.length; data32.set(HEAP32.subarray(src, src + num)); var data8 = SDL2.data8; var i = 3; var j = i + 4*num; if (num % 8 == 0) { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; data8[i] = 0xff; i = i + 4 | 0; } } else { while (i < j) { data8[i] = 0xff; i = i + 4 | 0; } } } SDL2.ctx.putImageData(SDL2.image, 0, 0); },  
+ 812428: ($0, $1, $2, $3, $4) => { var w = $0; var h = $1; var hot_x = $2; var hot_y = $3; var pixels = $4; var canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h; var ctx = canvas.getContext("2d"); var image = ctx.createImageData(w, h); var data = image.data; var src = pixels / 4; var dst = 0; var num; if (typeof CanvasPixelArray !== 'undefined' && data instanceof CanvasPixelArray) { num = data.length; while (dst < num) { var val = HEAP32[src]; data[dst ] = val & 0xff; data[dst+1] = (val >> 8) & 0xff; data[dst+2] = (val >> 16) & 0xff; data[dst+3] = (val >> 24) & 0xff; src++; dst += 4; } } else { var data32 = new Int32Array(data.buffer); num = data32.length; data32.set(HEAP32.subarray(src, src + num)); } ctx.putImageData(image, 0, 0); var url = hot_x === 0 && hot_y === 0 ? "url(" + canvas.toDataURL() + "), auto" : "url(" + canvas.toDataURL() + ") " + hot_x + " " + hot_y + ", auto"; var urlBuf = _malloc(url.length + 1); stringToUTF8(url, urlBuf, url.length + 1); return urlBuf; },  
+ 813416: ($0) => { if (Module['canvas']) { Module['canvas'].style['cursor'] = UTF8ToString($0); } },  
+ 813499: () => { if (Module['canvas']) { Module['canvas'].style['cursor'] = 'none'; } },  
+ 813568: () => { return window.innerWidth; },  
+ 813598: () => { return window.innerHeight; }
 };
 
 // end include: preamble.js
@@ -880,6 +836,7 @@ var ASM_CONSTS = {
   },
   preloadedAudios:{
   },
+  getCanvas:() => Module['canvas'],
   init() {
         if (Browser.initted) return;
         Browser.initted = true;
@@ -985,12 +942,13 @@ var ASM_CONSTS = {
         // Canvas event setup
   
         function pointerLockChange() {
-          Browser.pointerLock = document['pointerLockElement'] === Module['canvas'] ||
-                                document['mozPointerLockElement'] === Module['canvas'] ||
-                                document['webkitPointerLockElement'] === Module['canvas'] ||
-                                document['msPointerLockElement'] === Module['canvas'];
+          var canvas = Browser.getCanvas();
+          Browser.pointerLock = document['pointerLockElement'] === canvas ||
+                                document['mozPointerLockElement'] === canvas ||
+                                document['webkitPointerLockElement'] === canvas ||
+                                document['msPointerLockElement'] === canvas;
         }
-        var canvas = Module['canvas'];
+        var canvas = Browser.getCanvas();
         if (canvas) {
           // forced aspect ratio can be enabled by defining 'forcedAspectRatio' on Module
           // Module['forcedAspectRatio'] = 4 / 3;
@@ -1014,8 +972,8 @@ var ASM_CONSTS = {
   
           if (Module['elementPointerLock']) {
             canvas.addEventListener("click", (ev) => {
-              if (!Browser.pointerLock && Module['canvas'].requestPointerLock) {
-                Module['canvas'].requestPointerLock();
+              if (!Browser.pointerLock && Browser.getCanvas().requestPointerLock) {
+                Browser.getCanvas().requestPointerLock();
                 ev.preventDefault();
               }
             }, false);
@@ -1023,7 +981,7 @@ var ASM_CONSTS = {
         }
       },
   createContext(/** @type {HTMLCanvasElement} */ canvas, useWebGL, setInModule, webGLContextAttributes) {
-        if (useWebGL && Module['ctx'] && canvas == Module['canvas']) return Module['ctx']; // no need to recreate GL context if it's already been created for this canvas.
+        if (useWebGL && Module['ctx'] && canvas == Browser.getCanvas()) return Module['ctx']; // no need to recreate GL context if it's already been created for this canvas.
   
         var ctx;
         var contextHandle;
@@ -1074,7 +1032,7 @@ var ASM_CONSTS = {
         if (typeof Browser.lockPointer == 'undefined') Browser.lockPointer = true;
         if (typeof Browser.resizeCanvas == 'undefined') Browser.resizeCanvas = false;
   
-        var canvas = Module['canvas'];
+        var canvas = Browser.getCanvas();
         function fullscreenChange() {
           Browser.isFullscreen = false;
           var canvasContainer = canvas.parentNode;
@@ -1223,9 +1181,8 @@ var ASM_CONSTS = {
   calculateMouseCoords(pageX, pageY) {
         // Calculate the movement based on the changes
         // in the coordinates.
-        var rect = Module["canvas"].getBoundingClientRect();
-        var cw = Module["canvas"].width;
-        var ch = Module["canvas"].height;
+        var canvas = Browser.getCanvas();
+        var rect = canvas.getBoundingClientRect();
   
         // Neither .scrollX or .pageXOffset are defined in a spec, but
         // we prefer .scrollX because it is currently in a spec draft.
@@ -1238,8 +1195,8 @@ var ASM_CONSTS = {
         // the canvas might be CSS-scaled compared to its backbuffer;
         // SDL-using content will want mouse coordinates in terms
         // of backbuffer units.
-        adjustedX = adjustedX * (cw / rect.width);
-        adjustedY = adjustedY * (ch / rect.height);
+        adjustedX = adjustedX * (canvas.width / rect.width);
+        adjustedY = adjustedY * (canvas.height / rect.height);
   
         return { x: adjustedX, y: adjustedY };
       },
@@ -1292,11 +1249,11 @@ var ASM_CONSTS = {
       },
   resizeListeners:[],
   updateResizeListeners() {
-        var canvas = Module['canvas'];
+        var canvas = Browser.getCanvas();
         Browser.resizeListeners.forEach((listener) => listener(canvas.width, canvas.height));
       },
   setCanvasSize(width, height, noUpdates) {
-        var canvas = Module['canvas'];
+        var canvas = Browser.getCanvas();
         Browser.updateCanvasDimensions(canvas, width, height);
         if (!noUpdates) Browser.updateResizeListeners();
       },
@@ -1309,7 +1266,7 @@ var ASM_CONSTS = {
           flags = flags | 0x00800000; // set SDL_FULLSCREEN flag
           HEAP32[((SDL.screen)>>2)] = flags;
         }
-        Browser.updateCanvasDimensions(Module['canvas']);
+        Browser.updateCanvasDimensions(Browser.getCanvas());
         Browser.updateResizeListeners();
       },
   setWindowedCanvasSize() {
@@ -1319,7 +1276,7 @@ var ASM_CONSTS = {
           flags = flags & ~0x00800000; // clear SDL_FULLSCREEN flag
           HEAP32[((SDL.screen)>>2)] = flags;
         }
-        Browser.updateCanvasDimensions(Module['canvas']);
+        Browser.updateCanvasDimensions(Browser.getCanvas());
         Browser.updateResizeListeners();
       },
   updateCanvasDimensions(canvas, wNative, hNative) {
@@ -1376,6 +1333,12 @@ var ASM_CONSTS = {
         callbacks.shift()(Module);
       }
     };
+  var onPostRuns = [];
+  var addOnPostRun = (cb) => onPostRuns.unshift(cb);
+
+  var onPreRuns = [];
+  var addOnPreRun = (cb) => onPreRuns.unshift(cb);
+
 
   
     /**
@@ -5030,7 +4993,7 @@ var ASM_CONSTS = {
         }
         // Make sure the canvas object no longer refers to the context object so
         // there are no GC surprises.
-        if (GL.contexts[contextHandle]?.GLctx?.canvas) {
+        if (GL.contexts[contextHandle]?.GLctx.canvas) {
           GL.contexts[contextHandle].GLctx.canvas.GLctxObject = undefined;
         }
         GL.contexts[contextHandle] = null;
@@ -5113,7 +5076,7 @@ var ASM_CONSTS = {
       EGL.contextAttributes.majorVersion = glesContextVersion - 1; // WebGL 1 is GLES 2, WebGL2 is GLES3
       EGL.contextAttributes.minorVersion = 0;
   
-      EGL.context = GL.createContext(Module['canvas'], EGL.contextAttributes);
+      EGL.context = GL.createContext(Browser.getCanvas(), EGL.contextAttributes);
   
       if (EGL.context != 0) {
         EGL.setErrorCode(0x3000 /* EGL_SUCCESS */);
@@ -5726,6 +5689,8 @@ var ASM_CONSTS = {
     };
 
 
+  var onExits = [];
+  var addOnExit = (cb) => onExits.unshift(cb);
   var JSEvents = {
   memcpy(target, src, size) {
         HEAP8.set(HEAP8.subarray(src, src + size), target);
@@ -10053,21 +10018,21 @@ var ASM_CONSTS = {
   var FS_createDevice = FS.createDevice;
 
       // exports
-      Module["requestFullscreen"] = Browser.requestFullscreen;
-      Module["setCanvasSize"] = Browser.setCanvasSize;
-      Module["getUserMedia"] = Browser.getUserMedia;
-      Module["createContext"] = Browser.createContext;
+      Module['requestFullscreen'] = Browser.requestFullscreen;
+      Module['setCanvasSize'] = Browser.setCanvasSize;
+      Module['getUserMedia'] = Browser.getUserMedia;
+      Module['createContext'] = Browser.createContext;
     ;
 
   FS.createPreloadedFile = FS_createPreloadedFile;
   FS.staticInit();
   // Set module methods based on EXPORTED_RUNTIME_METHODS
-  Module["FS_createPath"] = FS.createPath;
-  Module["FS_createDataFile"] = FS.createDataFile;
-  Module["FS_createPreloadedFile"] = FS.createPreloadedFile;
-  Module["FS_unlink"] = FS.unlink;
-  Module["FS_createLazyFile"] = FS.createLazyFile;
-  Module["FS_createDevice"] = FS.createDevice;
+  Module['FS_createPath'] = FS.createPath;
+  Module['FS_createDataFile'] = FS.createDataFile;
+  Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
+  Module['FS_unlink'] = FS.unlink;
+  Module['FS_createLazyFile'] = FS.createLazyFile;
+  Module['FS_createDevice'] = FS.createDevice;
   ;
 
       // This error may happen quite a bit. To avoid overhead we reuse it (and
@@ -10077,9 +10042,9 @@ var ASM_CONSTS = {
       MEMFS.doesNotExistError.stack = '<generic error, no stack>';
       ;
 
-      Module["requestAnimationFrame"] = MainLoop.requestAnimationFrame;
-      Module["pauseMainLoop"] = MainLoop.pause;
-      Module["resumeMainLoop"] = MainLoop.resume;
+      Module['requestAnimationFrame'] = MainLoop.requestAnimationFrame;
+      Module['pauseMainLoop'] = MainLoop.pause;
+      Module['resumeMainLoop'] = MainLoop.resume;
       MainLoop.init();;
 for (var i = 0; i < 32; ++i) tempFixedLengthArray.push(new Array(i));;
 var wasmImports = {
